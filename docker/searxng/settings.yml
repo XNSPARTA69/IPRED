@@ -1,0 +1,15 @@
+use_default_settings: true
+server:
+    port: 8080
+    bind_address: "0.0.0.0"
+    secret_key: "ipred_chatbot_secret_key"
+search:
+    safe_search: 1
+    autocomplete: ""
+    formats:
+        - html
+        - json
+ui:
+    static_use_hash: true
+    theme_args:
+        simple_style: "dark"

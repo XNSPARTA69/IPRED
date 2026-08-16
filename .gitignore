@@ -1,0 +1,71 @@
+# ==============================================================================
+# IPRED Chatbot UIS - Git Ignore Configuration
+# ==============================================================================
+
+# --- Entorno y Secretos ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+docker/cloudflared/*.json
+
+# --- Python / Backend ---
+*.db
+*.db-shm
+*.db-wal
+backend/data/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+backend/dist/
+backend/build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Flutter / Dart / Frontend ---
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/.pub/
+frontend/build/
+frontend/android/app/debug/
+frontend/android/app/profile/
+frontend/android/app/release/
+frontend/ios/Flutter/.last_build_id
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+
+# --- Paquetes y Binarios Móviles ---
+*.apk
+*.aab
+*.ipa
+*.zip
+*.tar.gz
+
+# --- Datos y Volúmenes de Docker Locales ---
+postgres_data/
+redis_data/
+searxng_data/
+backend_data/
+
+# --- Logs y Temporales del Sistema ---
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDEs / Editores ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
