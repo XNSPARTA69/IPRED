@@ -64,13 +64,18 @@ jobs:
           cd frontend
           flutter build ios --release --no-codesign --no-tree-shake-icons --dart-define=API_BASE_URL=https://ipred.pasteleriamiranda.art
 
-      - name: Empaquetar Runner.app en ZIP
+      - name: Empaquetar Payload e IPA Oficial
         run: |
           cd frontend/build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r IPRED-iOS-Release.ipa Payload
           zip -r Runner-iOS-Release.zip Runner.app
 
       - name: Subir Build iOS como Artefacto
         uses: actions/upload-artifact@v4
         with:
           name: ipred-chatbot-ios-app
-          path: frontend/build/ios/iphoneos/Runner-iOS-Release.zip
+          path: |
+            frontend/build/ios/iphoneos/IPRED-iOS-Release.ipa
+            frontend/build/ios/iphoneos/Runner-iOS-Release.zip
