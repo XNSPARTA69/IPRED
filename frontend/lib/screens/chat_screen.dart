@@ -477,6 +477,7 @@ class _ChatScreenState extends State<ChatScreen> {
         await _loadConversations();
       }
       await _loadMessages();
+      _scrollToBottom(false);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -547,15 +548,26 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  void _scrollToBottom([bool immediate = false]) {
+    void performScroll() {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-        );
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        if (immediate) {
+          _scrollController.jumpTo(maxScroll);
+        } else {
+          _scrollController.animateTo(
+            maxScroll,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      performScroll();
+      // Segundo pase retardado para asegurar que tablas grandes o contenido Markdown renderizado ajusten el scroll
+      Future.delayed(const Duration(milliseconds: 100), performScroll);
     });
   }
 
