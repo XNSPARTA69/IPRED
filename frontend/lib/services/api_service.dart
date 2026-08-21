@@ -145,7 +145,7 @@ class ApiService {
   }
 
   // ============================================================
-  // CHAT STREAMING (Server-Sent Events)
+  // CHAT STREAMING (Server-Sent Events con Fallback Universal)
   // ============================================================
 
   Future<void> sendMessageStream({
@@ -159,74 +159,96 @@ class ApiService {
     required Function(String error) onError,
   }) async {
     _currentChatCancelToken = CancelToken();
-    try {
-      final response = await _dio.post<ResponseBody>(
-        '/chat/stream',
-        data: {
-          'message': message,
-          'conversacion_id': conversacionId,
-        },
-        cancelToken: _currentChatCancelToken,
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $accessToken',
-            'Accept': 'text/event-stream',
+
+    // 1. Intentar streaming SSE en Mobile / Plataformas nativas
+    if (!kIsWeb) {
+      try {
+        final response = await _dio.post<ResponseBody>(
+          '/chat/stream',
+          data: {
+            'message': message,
+            'conversacion_id': conversacionId,
           },
-          responseType: ResponseType.stream,
-          sendTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 120),
-        ),
-      );
+          cancelToken: _currentChatCancelToken,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Accept': 'text/event-stream',
+            },
+            responseType: ResponseType.stream,
+            sendTimeout: const Duration(seconds: 30),
+            receiveTimeout: const Duration(seconds: 120),
+          ),
+        );
 
-      final stream = response.data?.stream;
-      if (stream == null) {
-        onError('No se pudo establecer el canal de datos con el servidor.');
-        return;
-      }
+        final stream = response.data?.stream;
+        if (stream != null) {
+          String buffer = '';
+          await for (final unit in stream) {
+            buffer += utf8.decode(unit, allowMalformed: true);
+            final lines = buffer.split('\n');
+            buffer = lines.removeLast();
 
-      String buffer = '';
-      await for (final unit in stream) {
-        buffer += utf8.decode(unit, allowMalformed: true);
-        final lines = buffer.split('\n');
-        buffer = lines.removeLast();
-
-        for (final line in lines) {
-          final trimmed = line.trim();
-          if (trimmed.startsWith('data:')) {
-            final jsonStr = trimmed.substring(5).trim();
-            if (jsonStr.isNotEmpty) {
-              try {
-                final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-                final type = data['type'];
-                if (type == 'init') {
-                  onInit(data['conversacion_id']);
-                } else if (type == 'chunk') {
-                  onChunk(data['text'] ?? '');
-                } else if (type == 'tool') {
-                  onTool(data['name'] ?? '');
-                } else if (type == 'done') {
-                  onDone(data);
-                } else if (type == 'error') {
-                  onError(data['detail'] ?? 'Error desconocido');
+            for (final line in lines) {
+              final trimmed = line.trim();
+              if (trimmed.startsWith('data:')) {
+                final jsonStr = trimmed.substring(5).trim();
+                if (jsonStr.isNotEmpty) {
+                  try {
+                    final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+                    final type = data['type'];
+                    if (type == 'init') {
+                      onInit(data['conversacion_id']);
+                    } else if (type == 'chunk') {
+                      onChunk(data['text'] ?? '');
+                    } else if (type == 'tool') {
+                      onTool(data['name'] ?? '');
+                    } else if (type == 'done') {
+                      onDone(data);
+                    } else if (type == 'error') {
+                      onError(data['detail'] ?? 'Error desconocido');
+                    }
+                  } catch (_) {}
                 }
-              } catch (e) {
-                debugPrint('Error parseando evento SSE: $e');
               }
             }
           }
+          _currentChatCancelToken = null;
+          return;
         }
+      } on DioException catch (de) {
+        if (de.type == DioExceptionType.cancel) {
+          debugPrint('Stream cancelado por el usuario.');
+          return;
+        }
+        debugPrint('Fallo SSE nativo ($de). Pasando a fallback síncrono...');
+      } catch (e) {
+        debugPrint('Error en stream nativo ($e). Pasando a fallback síncrono...');
       }
-      _currentChatCancelToken = null;
-    } on DioException catch (de) {
-      if (de.type == DioExceptionType.cancel) {
-        debugPrint('Stream de chat cancelado por el usuario.');
-        return;
+    }
+
+    // 2. Fallback Universal (Web y plataformas con restricciones SSE)
+    try {
+      final syncResp = await sendMessage(message, accessToken, conversacionId);
+      if (syncResp != null) {
+        if (syncResp['conversacion_id'] != null) {
+          onInit(syncResp['conversacion_id']);
+        }
+        final respuesta = (syncResp['respuesta'] as String?) ?? '';
+        final words = respuesta.split(' ');
+        for (int i = 0; i < words.length; i++) {
+          if (_currentChatCancelToken != null && _currentChatCancelToken!.isCancelled) {
+            break;
+          }
+          onChunk(words[i] + (i < words.length - 1 ? ' ' : ''));
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
+        onDone(syncResp);
+      } else {
+        onError('No se pudo conectar con el servidor. Intenta de nuevo.');
       }
-      debugPrint('DioException en sendMessageStream: ${de.type} - ${de.message}');
-      onError('Error conectando con el servidor.');
     } catch (e) {
-      debugPrint('Error en sendMessageStream: $e');
-      onError('Error inesperado durante la transmisión.');
+      onError('Error de comunicación con el servidor.');
     } finally {
       _currentChatCancelToken = null;
     }
