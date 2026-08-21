@@ -35,17 +35,13 @@ ALCANCE Y LÍMITES ESTRICTOS DE TU FUNCIÓN:
    - Si el usuario te pide resolver una tarea, ejercicio, cálculo, matriz, ensayo temático o trabajo de clase, DECLINA DE FORMA INMEDIATA Y CORTÉS EN 1 SOLA FRASE:
      "Mi función es exclusivamente de orientación administrativa e institucional en el IPRED - UIS (horarios, docentes, trámites, reglamentos y redacción de correos). No estoy habilitado para resolver tareas, operaciones matemáticas ni trabajos académicos."
 
-3. VERACIDAD Y DATOS OFICIALES:
-   - No inventes datos administrativos; usa la información oficial de la base de datos, los reglamentos institucionales y los correos institucionales registrados.
-
-FORMATO OBLIGATORIO:
-- HORARIOS / TUTORÍAS: Tabla Markdown (| Fecha | Horario | Código | Asignatura (Grupo) | Modalidad | Docente |).
-- MATERIAS / PROFESORES: Tabla Markdown (| Código | Asignatura | Grupo | Docente | Correo Institucional |).
-- TRÁMITES / REQUISITOS: Listas estructuradas concisas con requisitos en negrita.
-- CORREOS / CARTAS ACADÉMICAS: Estructura formal con Asunto, Saludo respetuoso, Cuerpo con datos del estudiante y Despedida.
-- ESTUDIANTE AUTENTICADO: ({nombre_estudiante}, {programa_estudiante}, sede {sede_estudiante}, código {codigo_estudiante}). Nunca le pidas estos datos si ya están disponibles.
-
-Fecha actual: {fecha_actual}"""
+3. VERACIDAD Y FORMATO OBLIGATORIO:
+   - No inventes datos administrativos; usa la información oficial de la base de datos y reglamentos.
+   - HORARIOS / TUTORÍAS: Tabla Markdown (| Fecha | Horario | Código | Asignatura (Grupo) | Modalidad | Docente |).
+   - MATERIAS / PROFESORES: Tabla Markdown (| Código | Asignatura | Grupo | Docente | Correo Institucional |).
+   - TRÁMITES / REQUISITOS: Listas estructuradas concisas con requisitos en negrita.
+   - CORREOS / CARTAS ACADÉMICAS: Estructura formal con Asunto, Saludo respetuoso, Cuerpo con datos del estudiante y Despedida.
+   - Usa los datos del contexto autenticado del estudiante sin volver a solicitárselos."""
 
 
 class AIService:
@@ -60,7 +56,7 @@ class AIService:
             self._client = genai.Client(api_key=settings.gemini_api_key)
         return self._client
 
-    def _build_system_prompt(self, student_data: Optional[Dict[str, Any]] = None) -> str:
+    def _build_context_header(self, student_data: Optional[Dict[str, Any]] = None) -> str:
         nombre = "Estudiante"
         programa = "No especificado"
         sede = "No especificada"
@@ -75,13 +71,42 @@ class AIService:
             sede = student_data.get("nombre_sede") or sede
             codigo = str(student_data.get("codigo_est") or codigo)
 
-        return SYSTEM_PROMPT.format(
-            fecha_actual=date.today().isoformat(),
-            nombre_estudiante=nombre,
-            programa_estudiante=programa,
-            sede_estudiante=sede,
-            codigo_estudiante=codigo,
-        )
+        return f"[Contexto Sesión: {nombre} | Código: {codigo} | Sede: {sede} | Programa: {programa} | Fecha: {date.today().isoformat()}]\n\n"
+
+    def _format_history_compact(self, history: Optional[List[Dict[str, str]]]) -> List[types.Content]:
+        """Formatea y compacta el historial para ahorrar tokens de entrada."""
+        formatted: List[types.Content] = []
+        if not history:
+            return formatted
+
+        last_role = None
+        for msg in history[-6:]:
+            role = "user" if msg.get("role") in ("user", "human") else "model"
+            content = msg.get("content", "").strip()
+            if not content or "inconveniente temporal" in content or "dificultad procesando" in content:
+                continue
+
+            # Compactar respuestas excesivamente largas del modelo en turnos anteriores
+            if role == "model" and len(content) > 400:
+                lines = content.split("\n")
+                if len(lines) > 5:
+                    content = "\n".join(lines[:4]) + "\n... [Detalle previo procesado]"
+
+            if not formatted and role != "user":
+                continue
+            if role != last_role:
+                formatted.append(
+                    types.Content(
+                        role=role,
+                        parts=[types.Part.from_text(text=content)],
+                    )
+                )
+                last_role = role
+
+        if formatted and formatted[-1].role == "user":
+            formatted.pop()
+
+        return formatted
 
     async def chat(
         self,
@@ -95,7 +120,7 @@ class AIService:
         - Capa 0: Respuestas directas exactas cacheadas/aprendidas.
         - Capa 1: Búsqueda y orquestación con Gemini y function calling.
         """
-        # --- CAPA 0: Atajo directo para consultas recurrentes y tarjetas sugeridas (Zero-AI) ---
+        # --- CAPA 0: Atajo directo Zero-AI ---
         directa = await info_fija_service.buscar_respuesta_directa(
             message,
             codigo_est=codigo_est,
@@ -105,40 +130,16 @@ class AIService:
             return directa, ["zero_ai_directa"], 0
 
         # --- CAPA 1: Orquestación LLM con Gemini vía google.genai ---
-        prompt_personalizado = self._build_system_prompt(student_data)
         config = types.GenerateContentConfig(
-            system_instruction=prompt_personalizado,
+            system_instruction=SYSTEM_PROMPT,
             tools=[TOOLS_DECLARATION],
             temperature=0.2,
             max_output_tokens=500,
         )
 
         herramientas_usadas: List[str] = []
-
-        # Formatear historial con alternancia estricta para google.genai
-        formatted_history: List[types.Content] = []
-        if history:
-            last_role = None
-            for msg in history[-6:]:
-                role = "user" if msg.get("role") in ("user", "human") else "model"
-                content = msg.get("content", "").strip()
-                if not content or "inconveniente temporal" in content or "dificultad procesando" in content:
-                    continue
-                # Asegurar que el primer mensaje sea user
-                if not formatted_history and role != "user":
-                    continue
-                # Alternancia estricta
-                if role != last_role:
-                    formatted_history.append(
-                        types.Content(
-                            role=role,
-                            parts=[types.Part.from_text(text=content)],
-                        )
-                    )
-                    last_role = role
-            # Si el último es user, retirarlo para que no choque con el nuevo user turn
-            if formatted_history and formatted_history[-1].role == "user":
-                formatted_history.pop()
+        formatted_history = self._format_history_compact(history)
+        user_turn_text = self._build_context_header(student_data) + message
 
         try:
             chat_session = self.client.chats.create(
@@ -146,7 +147,7 @@ class AIService:
                 config=config,
                 history=formatted_history,
             )
-            response = await asyncio.to_thread(chat_session.send_message, message)
+            response = await asyncio.to_thread(chat_session.send_message, user_turn_text)
         except Exception as ex:
             logger.warning("Fallo al contactar Gemini (%s). Activando fallback inteligente FTS5.", ex)
             # Fallback inteligente a búsqueda FTS5 local
@@ -252,36 +253,16 @@ class AIService:
             return
 
         # --- CAPA 1: Orquestación LLM con Gemini ---
-        prompt_personalizado = self._build_system_prompt(student_data)
         config = types.GenerateContentConfig(
-            system_instruction=prompt_personalizado,
+            system_instruction=SYSTEM_PROMPT,
             tools=[TOOLS_DECLARATION],
             temperature=0.2,
             max_output_tokens=500,
         )
 
         herramientas_usadas: List[str] = []
-
-        formatted_history: List[types.Content] = []
-        if history:
-            last_role = None
-            for msg in history[-6:]:
-                role = "user" if msg.get("role") in ("user", "human") else "model"
-                content = msg.get("content", "").strip()
-                if not content or "inconveniente temporal" in content or "dificultad procesando" in content:
-                    continue
-                if not formatted_history and role != "user":
-                    continue
-                if role != last_role:
-                    formatted_history.append(
-                        types.Content(
-                            role=role,
-                            parts=[types.Part.from_text(text=content)],
-                        )
-                    )
-                    last_role = role
-            if formatted_history and formatted_history[-1].role == "user":
-                formatted_history.pop()
+        formatted_history = self._format_history_compact(history)
+        user_turn_text = self._build_context_header(student_data) + message
 
         chat_session = None
         try:
@@ -290,7 +271,7 @@ class AIService:
                 config=config,
                 history=formatted_history,
             )
-            response = await asyncio.to_thread(chat_session.send_message, message)
+            response = await asyncio.to_thread(chat_session.send_message, user_turn_text)
         except Exception as ex:
             logger.warning("Fallo al contactar Gemini en streaming (%s). Activando fallback FTS5.", ex)
             fts_res = await info_fija_service.buscar_fts5(message, limite=2)

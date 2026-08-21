@@ -357,11 +357,31 @@ class _ChatScreenState extends State<ChatScreen> {
     },
   };
 
+  bool _userScrolledUp = false;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScrollChanged);
     _loadUserProfile();
     _loadConversations();
+  }
+
+  void _onScrollChanged() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final distanceFromBottom = position.maxScrollExtent - position.pixels;
+    // Si el usuario está a más de 100px del fondo, está leyendo contenido arriba
+    if (distanceFromBottom > 100) {
+      if (!_userScrolledUp) {
+        _userScrolledUp = true;
+      }
+    } else {
+      // Si el usuario regresa al fondo, reactivar el seguimiento automático
+      if (_userScrolledUp) {
+        _userScrolledUp = false;
+      }
+    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -380,6 +400,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScrollChanged);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -475,6 +496,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     _isCancelledByUser = false;
+    _userScrolledUp = false;
     setState(() {
       _isLoading = true;
       _messages.add({
@@ -484,7 +506,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     });
 
-    _scrollToBottom();
+    _scrollToBottom(false, true);
 
     final authService = context.read<AuthService>();
     final apiService = context.read<ApiService>();
@@ -623,16 +645,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom([bool immediate = false]) {
+  void _scrollToBottom([bool immediate = false, bool force = false]) {
+    if (_userScrolledUp && !force) return;
+
     void performScroll() {
       if (_scrollController.hasClients) {
+        if (_userScrolledUp && !force) return;
         final maxScroll = _scrollController.position.maxScrollExtent;
         if (immediate) {
           _scrollController.jumpTo(maxScroll);
         } else {
           _scrollController.animateTo(
             maxScroll,
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
           );
         }
@@ -641,8 +666,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       performScroll();
-      // Segundo pase retardado para asegurar que tablas grandes o contenido Markdown renderizado ajusten el scroll
-      Future.delayed(const Duration(milliseconds: 100), performScroll);
     });
   }
 

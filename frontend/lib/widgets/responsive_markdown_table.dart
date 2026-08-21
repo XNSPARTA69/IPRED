@@ -287,7 +287,7 @@ class _ResponsiveMarkdownTableState extends State<ResponsiveMarkdownTable> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Detalle (${widget.rows.length} ${widget.rows.length == 1 ? 'registro' : 'registros'})',
+                  'Detalle de Asignaturas y Horarios',
                   style: GoogleFonts.outfit(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
