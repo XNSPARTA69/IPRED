@@ -1,9 +1,18 @@
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
 
 class ApiService {
+  CancelToken? _currentChatCancelToken;
+
+  /// Cancels the current in-flight chat request, if any.
+  void cancelCurrentRequest() {
+    _currentChatCancelToken?.cancel('User cancelled');
+    _currentChatCancelToken = null;
+  }
+
   static String get defaultBaseUrl {
     const fromEnv = String.fromEnvironment('API_BASE_URL');
     if (fromEnv.isNotEmpty) {
@@ -136,6 +145,94 @@ class ApiService {
   }
 
   // ============================================================
+  // CHAT STREAMING (Server-Sent Events)
+  // ============================================================
+
+  Future<void> sendMessageStream({
+    required String message,
+    required String accessToken,
+    required int? conversacionId,
+    required Function(int convId) onInit,
+    required Function(String chunk) onChunk,
+    required Function(String toolName) onTool,
+    required Function(Map<String, dynamic> doneData) onDone,
+    required Function(String error) onError,
+  }) async {
+    _currentChatCancelToken = CancelToken();
+    try {
+      final response = await _dio.post<ResponseBody>(
+        '/chat/stream',
+        data: {
+          'message': message,
+          'conversacion_id': conversacionId,
+        },
+        cancelToken: _currentChatCancelToken,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $accessToken',
+            'Accept': 'text/event-stream',
+          },
+          responseType: ResponseType.stream,
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 120),
+        ),
+      );
+
+      final stream = response.data?.stream;
+      if (stream == null) {
+        onError('No se pudo establecer el canal de datos con el servidor.');
+        return;
+      }
+
+      String buffer = '';
+      await for (final unit in stream) {
+        buffer += utf8.decode(unit, allowMalformed: true);
+        final lines = buffer.split('\n');
+        buffer = lines.removeLast();
+
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.startsWith('data:')) {
+            final jsonStr = trimmed.substring(5).trim();
+            if (jsonStr.isNotEmpty) {
+              try {
+                final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+                final type = data['type'];
+                if (type == 'init') {
+                  onInit(data['conversacion_id']);
+                } else if (type == 'chunk') {
+                  onChunk(data['text'] ?? '');
+                } else if (type == 'tool') {
+                  onTool(data['name'] ?? '');
+                } else if (type == 'done') {
+                  onDone(data);
+                } else if (type == 'error') {
+                  onError(data['detail'] ?? 'Error desconocido');
+                }
+              } catch (e) {
+                debugPrint('Error parseando evento SSE: $e');
+              }
+            }
+          }
+        }
+      }
+      _currentChatCancelToken = null;
+    } on DioException catch (de) {
+      if (de.type == DioExceptionType.cancel) {
+        debugPrint('Stream de chat cancelado por el usuario.');
+        return;
+      }
+      debugPrint('DioException en sendMessageStream: ${de.type} - ${de.message}');
+      onError('Error conectando con el servidor.');
+    } catch (e) {
+      debugPrint('Error en sendMessageStream: $e');
+      onError('Error inesperado durante la transmisión.');
+    } finally {
+      _currentChatCancelToken = null;
+    }
+  }
+
+  // ============================================================
   // CHAT (Timeout ampliado a 60s para razonamiento multi-hop)
   // ============================================================
 
@@ -144,6 +241,7 @@ class ApiService {
     String accessToken,
     int? conversacionId,
   ) async {
+    _currentChatCancelToken = CancelToken();
     try {
       final response = await _dio.post(
         '/chat/message',
@@ -151,18 +249,24 @@ class ApiService {
           'message': message,
           'conversacion_id': conversacionId,
         },
+        cancelToken: _currentChatCancelToken,
         options: Options(
           headers: {'Authorization': 'Bearer $accessToken'},
           sendTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(seconds: 60), // 60 segundos para tool-calling
         ),
       );
+      _currentChatCancelToken = null;
 
       if (response.statusCode == 200) {
         return response.data as Map<String, dynamic>;
       }
       return null;
     } on DioException catch (de) {
+      if (de.type == DioExceptionType.cancel) {
+        debugPrint('Solicitud de chat cancelada por el usuario.');
+        return null;
+      }
       debugPrint('DioException en sendMessage: ${de.type} - ${de.message}');
       return null;
     } catch (e) {

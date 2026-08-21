@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -434,6 +435,37 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool _isCancelledByUser = false;
+
+  void _cancelRequest() {
+    _isCancelledByUser = true;
+    final apiService = context.read<ApiService>();
+    apiService.cancelCurrentRequest();
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.stop_circle_outlined, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Generación detenida por el usuario.',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 13.5),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF334155),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
   Future<void> _sendMessage([String? customText]) async {
     final textToSend = customText ?? _messageController.text;
     if (textToSend.trim().isEmpty) return;
@@ -442,6 +474,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _messageController.clear();
     }
 
+    _isCancelledByUser = false;
     setState(() {
       _isLoading = true;
       _messages.add({
@@ -461,45 +494,87 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    final response = await apiService.sendMessage(
-      textToSend,
-      authService.accessToken!,
-      _currentConversationId,
+    Map<String, dynamic>? streamingAssistantMsg;
+
+    await apiService.sendMessageStream(
+      message: textToSend,
+      accessToken: authService.accessToken!,
+      conversacionId: _currentConversationId,
+      onInit: (convId) {
+        if (_currentConversationId == null && mounted) {
+          setState(() => _currentConversationId = convId);
+          _loadConversations();
+        }
+      },
+      onTool: (toolName) {
+        // Herramienta en ejecución
+      },
+      onChunk: (chunk) {
+        if (!mounted || _isCancelledByUser) return;
+        setState(() {
+          if (streamingAssistantMsg == null) {
+            streamingAssistantMsg = {
+              'id': DateTime.now().millisecondsSinceEpoch,
+              'rol': 'assistant',
+              'contenido': chunk,
+              'created_at': DateTime.now().toIso8601String(),
+              'es_ia': true,
+              'is_streaming': true,
+            };
+            _messages.add(streamingAssistantMsg!);
+          } else {
+            streamingAssistantMsg!['contenido'] =
+                (streamingAssistantMsg!['contenido'] as String) + chunk;
+          }
+        });
+        _scrollToBottom(false);
+      },
+      onDone: (doneData) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          if (streamingAssistantMsg != null) {
+            streamingAssistantMsg!['is_streaming'] = false;
+            streamingAssistantMsg!['fuentes'] = doneData['fuentes'];
+            streamingAssistantMsg!['es_ia'] = doneData['es_ia'] ?? true;
+            streamingAssistantMsg!['es_web'] = doneData['es_web'] ?? false;
+            streamingAssistantMsg!['tokens_usados'] = doneData['tokens_usados'] ?? 0;
+            streamingAssistantMsg!['metadata_json'] = jsonEncode({
+              'herramientas': doneData['herramientas_usadas'] ?? [],
+              'tokens': doneData['tokens_usados'] ?? 0,
+            });
+          }
+        });
+        _scrollToBottom(false);
+      },
+      onError: (errorMsg) {
+        if (!_isCancelledByUser && mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      errorMsg,
+                      style: GoogleFonts.plusJakartaSans(),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      },
     );
 
     if (mounted) {
       setState(() => _isLoading = false);
-    }
-
-    if (response != null) {
-      if (_currentConversationId == null) {
-        setState(() => _currentConversationId = response['conversacion_id']);
-        await _loadConversations();
-      }
-      await _loadMessages();
-      _scrollToBottom(false);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'No se pudo conectar con el servidor. Intenta de nuevo.',
-                    style: GoogleFonts.plusJakartaSans(),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
     }
   }
 
@@ -639,9 +714,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               controller: _scrollController,
                               cacheExtent: 2000,
                               padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
-                              itemCount: _messages.length + (_isLoading ? 1 : 0),
+                              itemCount: _messages.length + (_isLoading && (_messages.isEmpty || _messages.last['rol'] == 'user') ? 1 : 0),
                               itemBuilder: (context, index) {
-                                if (index == _messages.length && _isLoading) {
+                                if (index == _messages.length && _isLoading && (_messages.isEmpty || _messages.last['rol'] == 'user')) {
                                   return _buildThinkingIndicator(isDark);
                                 }
                                 final message = _messages[index];
@@ -1414,15 +1489,19 @@ class _ChatScreenState extends State<ChatScreen> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.uisGreen, AppTheme.uisGreenDark],
+                gradient: LinearGradient(
+                  colors: _isLoading
+                      ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
+                      : [AppTheme.uisGreen, AppTheme.uisGreenDark],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.uisGreen.withValues(alpha: 0.4),
+                    color: _isLoading
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                        : AppTheme.uisGreen.withValues(alpha: 0.4),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -1430,16 +1509,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: IconButton(
                 icon: _isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
+                    ? const Icon(Icons.stop_rounded, color: Colors.white, size: 22)
                     : const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
-                onPressed: _isLoading ? null : () => _sendMessage(),
+                tooltip: _isLoading ? 'Detener procesamiento' : 'Enviar mensaje',
+                onPressed: _isLoading ? _cancelRequest : () => _sendMessage(),
               ),
             ),
           ],

@@ -216,5 +216,166 @@ class AIService:
 
         return final_text, herramientas_usadas, tokens_usados
 
+    async def chat_stream(
+        self,
+        message: str,
+        codigo_est: int,
+        history: Optional[List[Dict[str, str]]] = None,
+        student_data: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Generador asíncrono para streaming en tiempo real (SSE).
+        Emite eventos:
+        - {"type": "chunk", "text": str}
+        - {"type": "tool", "name": str}
+        - {"type": "done", "tokens": int, "herramientas": List[str]}
+        """
+        # --- CAPA 0: Atajo directo Zero-AI ---
+        directa = await info_fija_service.buscar_respuesta_directa(
+            message,
+            codigo_est=codigo_est,
+            student_data=student_data,
+        )
+        if directa:
+            # Emisión fluida para Zero-AI
+            words = directa.split(" ")
+            for i, w in enumerate(words):
+                yield {"type": "chunk", "text": w + (" " if i < len(words) - 1 else "")}
+                await asyncio.sleep(0.015)
+            yield {"type": "done", "tokens": 0, "herramientas": ["zero_ai_directa"]}
+            return
+
+        # --- CAPA 1: Orquestación LLM con Gemini ---
+        prompt_personalizado = self._build_system_prompt(student_data)
+        config = types.GenerateContentConfig(
+            system_instruction=prompt_personalizado,
+            tools=[TOOLS_DECLARATION],
+            temperature=0.2,
+            max_output_tokens=500,
+        )
+
+        herramientas_usadas: List[str] = []
+
+        formatted_history: List[types.Content] = []
+        if history:
+            last_role = None
+            for msg in history[-6:]:
+                role = "user" if msg.get("role") in ("user", "human") else "model"
+                content = msg.get("content", "").strip()
+                if not content or "inconveniente temporal" in content or "dificultad procesando" in content:
+                    continue
+                if not formatted_history and role != "user":
+                    continue
+                if role != last_role:
+                    formatted_history.append(
+                        types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=content)],
+                        )
+                    )
+                    last_role = role
+            if formatted_history and formatted_history[-1].role == "user":
+                formatted_history.pop()
+
+        chat_session = None
+        try:
+            chat_session = self.client.chats.create(
+                model=settings.gemini_model,
+                config=config,
+                history=formatted_history,
+            )
+            response = await asyncio.to_thread(chat_session.send_message, message)
+        except Exception as ex:
+            logger.warning("Fallo al contactar Gemini en streaming (%s). Activando fallback FTS5.", ex)
+            fts_res = await info_fija_service.buscar_fts5(message, limite=2)
+            if fts_res:
+                bloques = [f"**{r['titulo']}**\n{r['contenido'][:600]}" for r in fts_res]
+                fallback_txt = "\n\n---\n\n".join(bloques)
+            else:
+                fallback_txt = "Estoy consultando la información oficial del IPRED. Por favor realiza tu consulta de nuevo en un momento."
+            for chunk in fallback_txt.split(" "):
+                yield {"type": "chunk", "text": chunk + " "}
+                await asyncio.sleep(0.015)
+            yield {"type": "done", "tokens": 0, "herramientas": ["base_conocimiento_fts5"]}
+            return
+
+        # Loop de ejecución de herramientas
+        max_tool_rounds = 3
+        round_count = 0
+        last_response_parts = None
+
+        while round_count < max_tool_rounds:
+            function_calls = response.function_calls
+            if not function_calls:
+                break
+            round_count += 1
+
+            response_parts = []
+            for call in function_calls:
+                tool_name = call.name
+                tool_args = call.args or {}
+                herramientas_usadas.append(tool_name)
+                yield {"type": "tool", "name": tool_name}
+
+                result = await tool_executor.execute(tool_name, tool_args, codigo_est)
+                if not isinstance(result, dict):
+                    result_payload = {"resultado": result}
+                else:
+                    result_payload = result
+
+                response_parts.append(
+                    types.Part.from_function_response(
+                        name=tool_name,
+                        response=result_payload,
+                    )
+                )
+
+            last_response_parts = response_parts
+            try:
+                response = await asyncio.to_thread(chat_session.send_message, response_parts)
+            except Exception as ex:
+                logger.warning("Error en tool response Gemini (%s).", ex)
+                break
+
+        # Extraer y emitir el texto final
+        final_text = ""
+        try:
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                text_parts = [p.text for p in response.candidates[0].content.parts if hasattr(p, "text") and p.text]
+                if text_parts:
+                    final_text = "".join(text_parts).strip()
+            if not final_text:
+                final_text = response.text or ""
+        except Exception:
+            final_text = ""
+
+        if not final_text or not final_text.strip():
+            fts_res = await info_fija_service.buscar_fts5(message, limite=2)
+            if fts_res:
+                bloques = [f"**{r['titulo']}**\n{r['contenido'][:600]}" for r in fts_res]
+                final_text = "\n\n---\n\n".join(bloques)
+            else:
+                final_text = "Aquí tienes la información oficial consultada en el IPRED - UIS."
+
+        tokens_usados = 0
+        try:
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
+                tokens_usados = response.usage_metadata.total_token_count or 0
+        except Exception:
+            tokens_usados = 0
+
+        # Streaming progresivo de texto al cliente
+        # Dividimos en chunks de palabras para entrega visual ultra fluida
+        words = final_text.split(" ")
+        for i, word in enumerate(words):
+            yield {"type": "chunk", "text": word + (" " if i < len(words) - 1 else "")}
+            await asyncio.sleep(0.012)
+
+        yield {
+            "type": "done",
+            "tokens": tokens_usados,
+            "herramientas": herramientas_usadas,
+        }
+
 
 ai_service = AIService()

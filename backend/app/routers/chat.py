@@ -5,6 +5,7 @@ Controlador HTTP limpio que delega la lógica de negocio al chat_service.
 
 import logging
 from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.responses import StreamingResponse
 
 from app.models.user import ChatRequest, ChatResponse
 from app.security.auth import get_current_user
@@ -37,6 +38,37 @@ async def send_message(req: ChatRequest, request: Request):
     except Exception as ex:
         logger.error("Error procesando mensaje de chat: %s", ex)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno procesando la consulta.")
+
+
+@router.post("/stream")
+async def send_message_stream(req: ChatRequest, request: Request):
+    """Envía un mensaje al chatbot y transmite la respuesta en tiempo real vía Server-Sent Events (SSE)."""
+    user = await get_current_user(request)
+
+    message_text = req.get_message_text()
+    if not message_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El mensaje no puede estar vacío")
+
+    try:
+        generator = chat_service.process_user_message_stream(
+            message_text=message_text,
+            user_dict=user,
+            conversacion_id=req.conversacion_id,
+        )
+        return StreamingResponse(
+            generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+    except Exception as ex:
+        logger.error("Error iniciando stream de chat: %s", ex)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno procesando el stream.")
 
 
 @router.get("/conversations")

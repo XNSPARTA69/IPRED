@@ -166,5 +166,150 @@ class ChatService:
             es_web=es_web,
         )
 
+    async def process_user_message_stream(
+        self,
+        message_text: str,
+        user_dict: Dict[str, Any],
+        conversacion_id: Optional[int] = None,
+    ):
+        """
+        Generador asíncrono para streaming SSE de extremo a extremo.
+        Emite strings en formato SSE: 'data: {...}\n\n'
+        """
+        user_id = user_dict["user_id"]
+        codigo_est = self.extract_student_code(user_dict)
+        db = await get_db()
+
+        # 1. Obtener o crear conversación
+        conv_id = conversacion_id
+        if not conv_id:
+            cursor = await db.execute(
+                "INSERT INTO conversaciones (usuario_id, titulo) VALUES (?, ?)",
+                (user_id, message_text[:50]),
+            )
+            await db.commit()
+            conv_id = cursor.lastrowid
+        else:
+            cursor = await db.execute(
+                "SELECT id FROM conversaciones WHERE id = ? AND usuario_id = ?",
+                (conv_id, user_id),
+            )
+            if not await cursor.fetchone():
+                yield f"data: {json.dumps({'type': 'error', 'detail': 'Conversación no encontrada.'})}\n\n"
+                return
+
+        # 2. Guardar mensaje del usuario
+        ahora_co = get_colombia_now().isoformat()
+        await db.execute(
+            "INSERT INTO mensajes (conversacion_id, rol, contenido, created_at) VALUES (?, 'user', ?, ?)",
+            (conv_id, message_text, ahora_co),
+        )
+        await db.commit()
+
+        # Emitir evento inicial de conversación
+        yield f"data: {json.dumps({'type': 'init', 'conversacion_id': conv_id})}\n\n"
+
+        # 3. Cargar historial
+        cursor = await db.execute(
+            """SELECT rol as role, contenido as content FROM mensajes
+               WHERE conversacion_id = ?
+               ORDER BY created_at DESC LIMIT 6""",
+            (conv_id,),
+        )
+        rows = await cursor.fetchall()
+        raw_history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+        history = raw_history[:-1] if len(raw_history) > 1 else []
+
+        # 4. Datos del estudiante
+        if codigo_est <= 0:
+            cur_u = await db.execute("SELECT username FROM usuarios WHERE id = ?", (user_id,))
+            row_u = await cur_u.fetchone()
+            if row_u and row_u["username"]:
+                try:
+                    codigo_est = int(row_u["username"])
+                except (ValueError, TypeError):
+                    codigo_est = 0
+
+        student_data = None
+        if codigo_est > 0:
+            profile = await student_repo.get_profile_by_code(codigo_est)
+            if profile:
+                student_data = profile.model_dump()
+
+        # 5. Iterar sobre el generador de ai_service
+        accumulated_text = []
+        herramientas_usadas: List[str] = []
+        tokens_finales = 0
+
+        try:
+            async for event in ai_service.chat_stream(
+                message=message_text,
+                codigo_est=codigo_est,
+                history=history,
+                student_data=student_data,
+            ):
+                event_type = event.get("type")
+                if event_type == "chunk":
+                    accumulated_text.append(event.get("text", ""))
+                    yield f"data: {json.dumps(event)}\n\n"
+                elif event_type == "tool":
+                    herramientas_usadas.append(event.get("name", ""))
+                    yield f"data: {json.dumps(event)}\n\n"
+                elif event_type == "done":
+                    tokens_finales = event.get("tokens", 0)
+                    herramientas_usadas = event.get("herramientas", herramientas_usadas)
+
+            # Persistencia de respuesta completada
+            full_response = "".join(accumulated_text).strip()
+            fuentes = self.determine_sources(herramientas_usadas)
+            es_web = bool(herramientas_usadas and ("buscar_informacion_web" in herramientas_usadas or "leer_pagina_web" in herramientas_usadas))
+
+            metadata = json.dumps({
+                "herramientas": herramientas_usadas,
+                "tokens": tokens_finales,
+            }, ensure_ascii=False)
+
+            ahora_asistente_co = get_colombia_now().isoformat()
+            db_bg = await get_db()
+            await db_bg.execute(
+                """INSERT INTO mensajes (conversacion_id, rol, contenido, metadata_json, tokens_input, tokens_output, created_at)
+                   VALUES (?, 'assistant', ?, ?, ?, ?, ?)""",
+                (conv_id, full_response, metadata, tokens_finales // 2, tokens_finales // 2, ahora_asistente_co),
+            )
+            await db_bg.execute(
+                "UPDATE conversaciones SET updated_at = ? WHERE id = ?",
+                (ahora_asistente_co, conv_id),
+            )
+            await db_bg.commit()
+
+            # Emitir evento final de finalización
+            done_payload = {
+                "type": "done",
+                "conversacion_id": conv_id,
+                "fuentes": fuentes,
+                "herramientas_usadas": herramientas_usadas,
+                "tokens_usados": tokens_finales,
+                "es_ia": (tokens_finales > 0),
+                "es_web": es_web,
+            }
+            yield f"data: {json.dumps(done_payload)}\n\n"
+
+        except asyncio.CancelledError:
+            logger.info("Stream cancelado por el cliente. Persistiendo texto parcial.")
+            full_response = "".join(accumulated_text).strip()
+            if full_response:
+                try:
+                    db_cancel = await get_db()
+                    ahora_asistente_co = get_colombia_now().isoformat()
+                    await db_cancel.execute(
+                        """INSERT INTO mensajes (conversacion_id, rol, contenido, metadata_json, tokens_input, tokens_output, created_at)
+                           VALUES (?, 'assistant', ?, ?, 0, 0, ?)""",
+                        (conv_id, full_response + " *[Detenido]*", "{}", ahora_asistente_co),
+                    )
+                    await db_cancel.commit()
+                except Exception as e_c:
+                    logger.error("Error persistiendo mensaje cancelado: %s", e_c)
+            raise
+
 
 chat_service = ChatService()
