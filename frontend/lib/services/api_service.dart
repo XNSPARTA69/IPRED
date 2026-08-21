@@ -153,7 +153,7 @@ class ApiService {
     required String accessToken,
     required int? conversacionId,
     required Function(int convId) onInit,
-    required Function(String chunk) onChunk,
+    required Function(String chunk, {bool? esIa}) onChunk,
     required Function(String toolName) onTool,
     required Function(Map<String, dynamic> doneData) onDone,
     required Function(String error) onError,
@@ -200,7 +200,7 @@ class ApiService {
                     if (type == 'init') {
                       onInit(data['conversacion_id']);
                     } else if (type == 'chunk') {
-                      onChunk(data['text'] ?? '');
+                      onChunk(data['text'] ?? '', esIa: data['es_ia']);
                     } else if (type == 'tool') {
                       onTool(data['name'] ?? '');
                     } else if (type == 'done') {
@@ -234,17 +234,18 @@ class ApiService {
         if (syncResp['conversacion_id'] != null) {
           onInit(syncResp['conversacion_id']);
         }
+        final bool isAi = syncResp['es_ia'] ?? false;
         final respuesta = (syncResp['respuesta'] as String?) ?? '';
         // Si la respuesta contiene tablas estructuradas (horarios/materias), emitir de forma limpia para evitar parpadeo de tarjetas
         if (respuesta.contains('|') && (respuesta.contains('---') || respuesta.contains(':-'))) {
-          onChunk(respuesta);
+          onChunk(respuesta, esIa: isAi);
         } else {
           final words = respuesta.split(' ');
           for (int i = 0; i < words.length; i++) {
             if (_currentChatCancelToken != null && _currentChatCancelToken!.isCancelled) {
               break;
             }
-            onChunk(words[i] + (i < words.length - 1 ? ' ' : ''));
+            onChunk(words[i] + (i < words.length - 1 ? ' ' : ''), esIa: isAi);
             await Future.delayed(const Duration(milliseconds: 10));
           }
         }

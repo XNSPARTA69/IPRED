@@ -531,7 +531,7 @@ class _ChatScreenState extends State<ChatScreen> {
       onTool: (toolName) {
         // Herramienta en ejecución
       },
-      onChunk: (chunk) {
+      onChunk: (chunk, {bool? esIa}) {
         if (!mounted || _isCancelledByUser) return;
         setState(() {
           if (streamingAssistantMsg == null) {
@@ -540,11 +540,14 @@ class _ChatScreenState extends State<ChatScreen> {
               'rol': 'assistant',
               'contenido': chunk,
               'created_at': DateTime.now().toIso8601String(),
-              'es_ia': true,
+              'es_ia': esIa ?? false,
               'is_streaming': true,
             };
             _messages.add(streamingAssistantMsg!);
           } else {
+            if (esIa != null) {
+              streamingAssistantMsg!['es_ia'] = esIa;
+            }
             streamingAssistantMsg!['contenido'] =
                 (streamingAssistantMsg!['contenido'] as String) + chunk;
           }

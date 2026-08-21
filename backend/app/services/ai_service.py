@@ -234,9 +234,9 @@ class AIService:
         """
         Generador asíncrono para streaming en tiempo real (SSE).
         Emite eventos:
-        - {"type": "chunk", "text": str}
-        - {"type": "tool", "name": str}
-        - {"type": "done", "tokens": int, "herramientas": List[str]}
+        - {"type": "chunk", "text": str, "es_ia": bool}
+        - {"type": "tool", "name": str, "es_ia": bool}
+        - {"type": "done", "tokens": int, "herramientas": List[str], "es_ia": bool}
         """
         # --- CAPA 0: Atajo directo Zero-AI ---
         directa = await info_fija_service.buscar_respuesta_directa(
@@ -245,9 +245,9 @@ class AIService:
             student_data=student_data,
         )
         if directa:
-            # Emisión limpia e instantánea para Zero-AI (evita fragmentar tablas y elimina lag visual)
-            yield {"type": "chunk", "text": directa}
-            yield {"type": "done", "tokens": 0, "herramientas": ["zero_ai_directa"]}
+            # Emisión limpia e instantánea para Zero-AI (es_ia: False garantizado)
+            yield {"type": "chunk", "text": directa, "es_ia": False}
+            yield {"type": "done", "tokens": 0, "herramientas": ["zero_ai_directa"], "es_ia": False}
             return
 
         # --- CAPA 1: Orquestación LLM con Gemini ---
@@ -279,9 +279,9 @@ class AIService:
             else:
                 fallback_txt = "Estoy consultando la información oficial del IPRED. Por favor realiza tu consulta de nuevo en un momento."
             for chunk in fallback_txt.split(" "):
-                yield {"type": "chunk", "text": chunk + " "}
+                yield {"type": "chunk", "text": chunk + " ", "es_ia": False}
                 await asyncio.sleep(0.015)
-            yield {"type": "done", "tokens": 0, "herramientas": ["base_conocimiento_fts5"]}
+            yield {"type": "done", "tokens": 0, "herramientas": ["base_conocimiento_fts5"], "es_ia": False}
             return
 
         # Loop de ejecución de herramientas
@@ -300,7 +300,7 @@ class AIService:
                 tool_name = call.name
                 tool_args = call.args or {}
                 herramientas_usadas.append(tool_name)
-                yield {"type": "tool", "name": tool_name}
+                yield {"type": "tool", "name": tool_name, "es_ia": True}
 
                 result = await tool_executor.execute(tool_name, tool_args, codigo_est)
                 if not isinstance(result, dict):
@@ -353,13 +353,14 @@ class AIService:
         # Dividimos en chunks de palabras para entrega visual ultra fluida
         words = final_text.split(" ")
         for i, word in enumerate(words):
-            yield {"type": "chunk", "text": word + (" " if i < len(words) - 1 else "")}
+            yield {"type": "chunk", "text": word + (" " if i < len(words) - 1 else ""), "es_ia": True}
             await asyncio.sleep(0.012)
 
         yield {
             "type": "done",
             "tokens": tokens_usados,
             "herramientas": herramientas_usadas,
+            "es_ia": True,
         }
 
 
