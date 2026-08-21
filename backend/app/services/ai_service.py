@@ -245,11 +245,8 @@ class AIService:
             student_data=student_data,
         )
         if directa:
-            # Emisión fluida para Zero-AI
-            words = directa.split(" ")
-            for i, w in enumerate(words):
-                yield {"type": "chunk", "text": w + (" " if i < len(words) - 1 else "")}
-                await asyncio.sleep(0.015)
+            # Emisión limpia e instantánea para Zero-AI (evita fragmentar tablas y elimina lag visual)
+            yield {"type": "chunk", "text": directa}
             yield {"type": "done", "tokens": 0, "herramientas": ["zero_ai_directa"]}
             return
 

@@ -506,6 +506,7 @@ class _ChatBubbleState extends State<ChatBubble> {
     if (rows.isEmpty) return null;
 
     return ResponsiveMarkdownTable(
+      key: ValueKey('tbl_${headers.join('_')}'),
       headers: headers,
       rows: rows,
       isDark: isDark,
