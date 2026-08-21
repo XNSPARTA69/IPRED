@@ -71,7 +71,8 @@ class AIService:
             sede = student_data.get("nombre_sede") or sede
             codigo = str(student_data.get("codigo_est") or codigo)
 
-        return f"[Contexto Sesión: {nombre} | Código: {codigo} | Sede: {sede} | Programa: {programa} | Fecha: {date.today().isoformat()}]\n\n"
+        from app.config import get_colombia_now
+        return f"[Contexto Sesión: {nombre} | Código: {codigo} | Sede: {sede} | Programa: {programa} | Fecha: {get_colombia_now().date().isoformat()}]\n\n"
 
     def _format_history_compact(self, history: Optional[List[Dict[str, str]]]) -> List[types.Content]:
         """Formatea y compacta el historial para ahorrar tokens de entrada."""
