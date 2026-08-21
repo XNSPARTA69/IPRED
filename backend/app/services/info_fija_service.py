@@ -672,17 +672,22 @@ async def buscar_respuesta_directa(
     """
     clean_p = normalize_text(pregunta)
     
-    # 0. Interceptor Zero-AI para temas fuera de contexto (0 tokens gastados, validación por palabra completa)
-    out_of_context_words = [
+    # 0. Interceptor Zero-AI para tareas académicas, matemáticas y temas fuera de contexto (0 tokens)
+    academic_homework_words = [
+        r"\bmatriz\b", r"\bmatrices\b", r"\bdeterminante\b", r"\bvector\b", r"\bvectores\b",
+        r"\bcalcula\b", r"\bcalcular\b", r"\bderivada\b", r"\bintegral\b", r"\becuacion\b",
+        r"\bejercicio\b", r"\btarea\b", r"\btaller\b", r"\bexamen\b", r"\bparcial resuelto\b",
+        r"\bresuelve\b", r"\bresolver\b", r"\bquimica\b", r"\bfisica\b", r"\bbalanceo\b",
+        r"\bcodigo python\b", r"\bescribe un codigo\b", r"\bcomo programar\b", r"\bhazme un codigo\b",
+        r"\bensayo sobre\b", r"\bresumen del libro\b", r"\bresumen de la obra\b", r"\btraduccion de texto\b",
         r"\breceta\b", r"\bcocinar\b", r"\bcomo hacer arroz\b", r"\bcomo hacer pasta\b", r"\bchiste\b",
         r"\bpartido de futbol\b", r"\bmusica\b", r"\bcancion\b", r"\bletra de\b", r"\bpelicula\b",
-        r"\bcuanto es 2\+", r"\bcodigo python\b", r"\bescribe un codigo\b", r"\bcomo programar\b",
-        r"\bpoema\b", r"\bcuento\b", r"\bhistoria de terror\b", r"\badivinanza\b", r"\bhoroscopo\b",
-        r"\bsigno zodiacal\b", r"\bbitcoin\b", r"\bcriptomoneda\b", r"\bdolar hoy\b", r"\bclima hoy\b"
+        r"\bcuanto es\b", r"\bpoema\b", r"\bcuento\b", r"\bhistoria de terror\b", r"\badivinanza\b",
+        r"\bhoroscopo\b", r"\bsigno zodiacal\b", r"\bbitcoin\b", r"\bcriptomoneda\b", r"\bdolar hoy\b", r"\bclima hoy\b"
     ]
-    if any(re.search(p, clean_p) for p in out_of_context_words):
-        logger.info("Capa 0 ZERO-AI HIT: Consulta fuera de contexto denegada en 1 línea.")
-        return "Solo puedo ayudarte con consultas académicas e institucionales del IPRED - UIS."
+    if any(re.search(p, clean_p) for p in academic_homework_words):
+        logger.info("Capa 0 ZERO-AI HIT: Tarea/Ejercicio/Fuera de contexto declinado en 1 línea.")
+        return "Mi función es exclusivamente de orientación administrativa e institucional en el IPRED - UIS (horarios, docentes, trámites, reglamentos y redacción de correos). No estoy habilitado para resolver tareas, operaciones matemáticas ni trabajos académicos."
 
     # 0.1 Protección contra negaciones o consultas complejas
     if any(neg in clean_p for neg in ["no quiero", "no me muestres", "no ver", "sin mis", "otra cosa", "en vez de", "diferente a"]):
