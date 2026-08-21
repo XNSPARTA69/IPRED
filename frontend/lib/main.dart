@@ -33,7 +33,7 @@ class IpredChatbotApp extends StatelessWidget {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
-      title: 'IPRED Chatbot UIS',
+      title: 'UIS DYV',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

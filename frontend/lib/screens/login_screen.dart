@@ -190,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ).animate().scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1), duration: 500.ms, curve: Curves.easeOutBack),
         const SizedBox(height: 16),
         Text(
-          'IPRED CHATBOT',
+          'UIS DYV',
           style: GoogleFonts.outfit(
             fontSize: 26,
             fontWeight: FontWeight.bold,
