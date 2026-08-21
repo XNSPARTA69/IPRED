@@ -672,21 +672,55 @@ async def buscar_respuesta_directa(
     """
     clean_p = normalize_text(pregunta)
     
-    # 0. Interceptor Zero-AI para tareas académicas, matemáticas y temas fuera de contexto (0 tokens)
-    academic_homework_words = [
-        r"\bmatriz\b", r"\bmatrices\b", r"\bdeterminante\b", r"\bvector\b", r"\bvectores\b",
-        r"\bcalcula\b", r"\bcalcular\b", r"\bderivada\b", r"\bintegral\b", r"\becuacion\b",
-        r"\bejercicio\b", r"\btarea\b", r"\btaller\b", r"\bexamen\b", r"\bparcial resuelto\b",
-        r"\bresuelve\b", r"\bresolver\b", r"\bquimica\b", r"\bfisica\b", r"\bbalanceo\b",
-        r"\bcodigo python\b", r"\bescribe un codigo\b", r"\bcomo programar\b", r"\bhazme un codigo\b",
-        r"\bensayo sobre\b", r"\bresumen del libro\b", r"\bresumen de la obra\b", r"\btraduccion de texto\b",
-        r"\breceta\b", r"\bcocinar\b", r"\bcomo hacer arroz\b", r"\bcomo hacer pasta\b", r"\bchiste\b",
-        r"\bpartido de futbol\b", r"\bmusica\b", r"\bcancion\b", r"\bletra de\b", r"\bpelicula\b",
-        r"\bcuanto es\b", r"\bpoema\b", r"\bcuento\b", r"\bhistoria de terror\b", r"\badivinanza\b",
-        r"\bhoroscopo\b", r"\bsigno zodiacal\b", r"\bbitcoin\b", r"\bcriptomoneda\b", r"\bdolar hoy\b", r"\bclima hoy\b"
-    ]
-    if any(re.search(p, clean_p) for p in academic_homework_words):
-        logger.info("Capa 0 ZERO-AI HIT: Tarea/Ejercicio/Fuera de contexto declinado en 1 línea.")
+    # 0. Interceptor Zero-AI para tareas académicas, programación, matemáticas y temas fuera de contexto (0 tokens)
+    es_codigo_institucional = any(
+        kw in clean_p for kw in [
+            "codigo de la materia", "codigo de materia", "codigo de asignatura",
+            "codigo de estudiante", "mi codigo", "codigo est", "codigo uis",
+            "codigo de profesor", "codigo de la sede", "codigo postal"
+        ]
+    )
+    
+    es_programacion = any(
+        re.search(p, clean_p) for p in [
+            r"\bpython\b", r"\bjavascript\b", r"\bjava\b", r"\bc\+\+\b", r"\bc#\b", r"\bphp\b", r"\bruby\b",
+            r"\bscript\b", r"\bprogramar\b", r"\bprogramacion\b", r"\bhtml\b", r"\bcss\b", r"\bsql\b",
+            r"\balgoritmo\b", r"\bhazme un codigo\b", r"\bescribe un codigo\b", r"\bcomo hacer un codigo\b",
+            r"\bcodigo de python\b", r"\bcodigo para\b", r"\bfuncion en\b", r"\bhacer un codigo\b"
+        ]
+    )
+    
+    es_matematica_ciencias = any(
+        re.search(p, clean_p) for p in [
+            r"\bmatriz\b", r"\bmatrices\b", r"\bdeterminante\b", r"\bvector\b", r"\bvectores\b",
+            r"\bcalcula\b", r"\bcalcular\b", r"\bderivada\b", r"\bintegral\b", r"\becuacion\b",
+            r"\btrigonometria\b", r"\bgeometria\b", r"\balgebra\b", r"\barea del\b", r"\bperimetro\b",
+            r"\bquimica\b", r"\bfisica\b", r"\bbalanceo\b", r"\btermodinamica\b", r"\bmolecula\b",
+            r"\bcuanto es \d+", r"\d+\s*[\+\-\*\/x]\s*\d+"
+        ]
+    )
+
+    es_tarea_humanidades = any(
+        re.search(p, clean_p) for p in [
+            r"\bejercicio de\b", r"\btarea de\b", r"\btaller de\b", r"\bparcial resuelto\b",
+            r"\bresuelve este\b", r"\bresolver este\b", r"\bresuelve el\b", r"\bresolver el\b",
+            r"\bensayo sobre\b", r"\bensayo de\b", r"\bresumen del libro\b", r"\bresumen de la obra\b",
+            r"\btraduccion de texto\b", r"\btraduce este texto\b", r"\bque es la celula\b",
+            r"\bfotosintesis\b", r"\brevolucion industrial\b", r"\bsegunda guerra mundial\b"
+        ]
+    )
+
+    es_fuera_de_lugar = any(
+        re.search(p, clean_p) for p in [
+            r"\breceta\b", r"\bcocinar\b", r"\bcomo hacer arroz\b", r"\bcomo hacer pasta\b", r"\bchiste\b",
+            r"\bpartido de futbol\b", r"\bmusica\b", r"\bcancion\b", r"\bletra de\b", r"\bpelicula\b",
+            r"\bpoema\b", r"\bcuento\b", r"\bhistoria de terror\b", r"\badivinanza\b",
+            r"\bhoroscopo\b", r"\bsigno zodiacal\b", r"\bbitcoin\b", r"\bcriptomoneda\b", r"\bdolar hoy\b", r"\bclima hoy\b"
+        ]
+    )
+
+    if (es_programacion and not es_codigo_institucional) or es_matematica_ciencias or es_tarea_humanidades or es_fuera_de_lugar:
+        logger.info("Capa 0 ZERO-AI HIT: Tarea/Ejercicio/Código/Fuera de contexto declinado en 1 línea.")
         return "Mi función es exclusivamente de orientación administrativa e institucional en el IPRED - UIS (horarios, docentes, trámites, reglamentos y redacción de correos). No estoy habilitado para resolver tareas, operaciones matemáticas ni trabajos académicos."
 
     # 0.1 Protección contra negaciones o consultas complejas
