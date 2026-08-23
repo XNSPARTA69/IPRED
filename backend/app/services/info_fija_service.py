@@ -915,6 +915,24 @@ async def buscar_respuesta_directa(
     return None
 
 
+def _format_info_fija_row(r: Any) -> dict:
+    """Sanitiza y formatea filas de info_fija reemplazando claves internas por títulos legibles."""
+    d = dict(r)
+    raw_titulo = (d.get("titulo") or "").strip()
+    raw_categoria = (d.get("categoria") or "").strip()
+    
+    # Si 'titulo' es una clave interna (como TRAMITES_005, OFERTA_FARMACIA_02, ACCESO_002),
+    # usar el nombre descriptivo de 'categoria' como título legible
+    if re.match(r"^[A-Z0-9_]+$", raw_titulo) and raw_categoria:
+        human_title = raw_categoria
+    else:
+        human_title = raw_titulo or raw_categoria or "Información Institucional"
+
+    d["titulo"] = human_title
+    d["clave"] = raw_titulo
+    return d
+
+
 async def buscar_fts5(pregunta: str, limite: int = 3) -> list[dict]:
     """
     CAPA 1: Búsqueda Full-Text en Español sobre PostgreSQL con índices GIN.
@@ -949,7 +967,7 @@ async def buscar_fts5(pregunta: str, limite: int = 3) -> list[dict]:
         rows = await cursor.fetchall()
         if rows:
             logger.info("Capa 1 PG-FTS: %d resultados para '%s'", len(rows), ts_query_str)
-            return [dict(r) for r in rows]
+            return [_format_info_fija_row(r) for r in rows]
     except Exception as e:
         logger.debug("PG FTS bypass: %s", e)
 
@@ -963,7 +981,7 @@ async def buscar_fts5(pregunta: str, limite: int = 3) -> list[dict]:
             (f"%{safe_keywords[0]}%", f"%{safe_keywords[0]}%", limite),
         )
         rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+        return [_format_info_fija_row(r) for r in rows]
     except Exception as e:
         logger.warning("FTS fallback error: %s", e)
         return []

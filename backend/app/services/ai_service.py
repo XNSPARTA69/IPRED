@@ -159,7 +159,13 @@ class AIService:
             # Fallback inteligente a búsqueda FTS5 local
             fts_res = await info_fija_service.buscar_fts5(message, limite=2)
             if fts_res:
-                bloques = [f"**{r['titulo']}**\n{r['contenido'][:600]}" for r in fts_res]
+                bloques = []
+                for r in fts_res:
+                    cont = r.get("contenido", "").strip()
+                    if cont.startswith("#"):
+                        bloques.append(cont)
+                    else:
+                        bloques.append(f"### 📋 {r['titulo']}\n\n{cont}")
                 return "\n\n---\n\n".join(bloques), ["base_conocimiento_fts5"], 0
             return ("Estoy consultando la información oficial del IPRED. Por favor realiza tu consulta de nuevo en un momento.", [], 0)
 
@@ -279,7 +285,13 @@ class AIService:
             logger.warning("Fallo al contactar Gemini en streaming (%s). Activando fallback FTS5.", ex)
             fts_res = await info_fija_service.buscar_fts5(message, limite=2)
             if fts_res:
-                bloques = [f"**{r['titulo']}**\n{r['contenido'][:600]}" for r in fts_res]
+                bloques = []
+                for r in fts_res:
+                    cont = r.get("contenido", "").strip()
+                    if cont.startswith("#"):
+                        bloques.append(cont)
+                    else:
+                        bloques.append(f"### 📋 {r['titulo']}\n\n{cont}")
                 fallback_txt = "\n\n---\n\n".join(bloques)
             else:
                 fallback_txt = "Estoy consultando la información oficial del IPRED. Por favor realiza tu consulta de nuevo en un momento."
