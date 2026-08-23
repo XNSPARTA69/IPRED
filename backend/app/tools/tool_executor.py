@@ -44,9 +44,9 @@ class ToolExecutor:
                     if future_h:
                         horario = future_h
 
-                # Compresión compacta para optimizar consumo de tokens de contexto (máximo 8 próximas sesiones)
+                # Compresión compacta estructurada con código de asignatura para Gemini
                 compressed = [
-                    f"{h.nombre_asignatura} (G{h.grupo}) - {h.fecha_tutoria} {str(h.hora_inicio)[:5]}-{str(h.hora_fin)[:5]} Prof: {h.profesor or 'Por asignar'} [{h.tipo_tutoria or 'Tutoría'}]"
+                    f"Código: {h.codigo_asignatura} | {h.nombre_asignatura} (G{h.grupo}) | Fecha: {h.fecha_tutoria} | Horario: {str(h.hora_inicio)[:5]}-{str(h.hora_fin)[:5]} | Docente: {h.profesor or 'Por asignar'} ({h.correo_profesor or 'Sin correo'}) | Modalidad: [{h.tipo_tutoria or 'Tutoría'}]"
                     for h in horario[:8]
                 ]
                 return {"horario_tutorias": compressed}
@@ -61,7 +61,7 @@ class ToolExecutor:
                     return {"mensaje": "No tienes asignaturas matriculadas registradas en el sistema."}
 
                 resumen = [
-                    f"{a.nombre_asignatura} (Grupo {a.grupo}) - Docente: {a.profesor or 'No asignado'} ({a.correo_profesor or 'Sin correo'})"
+                    f"Código: {a.codigo_asignatura} | Asignatura: {a.nombre_asignatura} (Grupo {a.grupo}) | Docente: {a.profesor or 'No asignado'} ({a.correo_profesor or 'Sin correo'})"
                     for a in asignaturas
                 ]
                 return {"asignaturas_matriculadas": resumen}
