@@ -324,8 +324,8 @@ class UISSyncService:
 
                 logger.info("Descarga completada: %d asignaturas y %d sesiones de horario.", total_asig_count, total_horarios_count)
 
-                # Inserción y actualización atómica en SQLite
-                # Inserción y actualización atómica en PostgreSQL
+                # Inserción y actualización atómica en lotes no bloqueantes (Batching para alta concurrencia)
+                BATCH_SIZE = 250
                 if all_asignaturas:
                     asig_rows = [
                         (
@@ -341,14 +341,18 @@ class UISSyncService:
                         )
                         for a in all_asignaturas.values()
                     ]
-                    await db.executemany(
-                        """INSERT OR REPLACE INTO asignaturas (
-                            codigo_programa, nombre_programa, codigo_sede,
-                            codigo_asignatura, nombre_asignatura, id_semestre,
-                            grupo, nombre_completo, correo_institucional
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        asig_rows,
-                    )
+                    for i in range(0, len(asig_rows), BATCH_SIZE):
+                        chunk = asig_rows[i:i + BATCH_SIZE]
+                        await db.executemany(
+                            """INSERT OR REPLACE INTO asignaturas (
+                                codigo_programa, nombre_programa, codigo_sede,
+                                codigo_asignatura, nombre_asignatura, id_semestre,
+                                grupo, nombre_completo, correo_institucional
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            chunk,
+                        )
+                        await db.commit()
+                        await asyncio.sleep(0.005)
 
                 if all_horarios:
                     hor_rows = [
@@ -358,15 +362,17 @@ class UISSyncService:
                         )
                         for h in all_horarios.values()
                     ]
-                    await db.executemany(
-                        """INSERT OR REPLACE INTO horarios (
-                            codigo_asignatura, grupo, fecha_tutoria,
-                            hora_inicio, hora_fin, tipo_tutoria
-                        ) VALUES (?, ?, ?, ?, ?, ?)""",
-                        hor_rows,
-                    )
-
-                await db.commit()
+                    for i in range(0, len(hor_rows), BATCH_SIZE):
+                        chunk = hor_rows[i:i + BATCH_SIZE]
+                        await db.executemany(
+                            """INSERT OR REPLACE INTO horarios (
+                                codigo_asignatura, grupo, fecha_tutoria,
+                                hora_inicio, hora_fin, tipo_tutoria
+                            ) VALUES (?, ?, ?, ?, ?, ?)""",
+                            chunk,
+                        )
+                        await db.commit()
+                        await asyncio.sleep(0.005)
 
                 # Refrescar vista materializada de carga de estudiantes
                 try:

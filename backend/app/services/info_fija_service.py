@@ -953,12 +953,12 @@ async def buscar_fts5(pregunta: str, limite: int = 3) -> list[dict]:
     except Exception as e:
         logger.debug("PG FTS bypass: %s", e)
 
-    # 2. Fallback con Trigramas / ILIKE
+    # 2. Fallback con Trigramas / LIKE case-insensitive universal
     try:
         cursor = await db.execute(
             """SELECT id, titulo, contenido, categoria, 0.5 as relevancia
                FROM info_fija
-               WHERE activo = true AND (titulo ILIKE ? OR contenido ILIKE ?)
+               WHERE activo = true AND (LOWER(titulo) LIKE LOWER(?) OR LOWER(contenido) LIKE LOWER(?))
                LIMIT ?""",
             (f"%{safe_keywords[0]}%", f"%{safe_keywords[0]}%", limite),
         )

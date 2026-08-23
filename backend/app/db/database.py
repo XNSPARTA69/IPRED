@@ -96,10 +96,11 @@ async def init_db() -> None:
 
         pool = await asyncpg.create_pool(
             dsn=clean_url,
-            min_size=5,
-            max_size=50,
-            statement_cache_size=100,
-            command_timeout=30.0,
+            min_size=10,
+            max_size=60,
+            statement_cache_size=150,
+            command_timeout=20.0,
+            max_inactive_connection_lifetime=300.0,
         )
         _db_connection = PostgresConnectionWrapper(pool)
         _is_postgres = True

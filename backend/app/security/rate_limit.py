@@ -27,8 +27,28 @@ def get_real_client_ip(request: Request) -> str:
         return request.client.host
     return "127.0.0.1"
 
+
+def get_rate_limit_key(request: Request) -> str:
+    """
+    Extractor de clave de Rate Limiting Híbrido:
+    1. Si el usuario está autenticado (Bearer JWT), limita individualmente por ID de usuario.
+       Evita que cientos de estudiantes en el Wi-Fi del campus o salas de cómputo compartan y agoten la cuota.
+    2. Si la petición es anónima o en login, limita por la IP pública real del cliente.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        if token:
+            from app.services.auth_service import decode_access_token
+            payload = decode_access_token(token)
+            if payload and "sub" in payload:
+                return f"user:{payload['sub']}"
+
+    return f"ip:{get_real_client_ip(request)}"
+
+
 limiter = Limiter(
-    key_func=get_real_client_ip,
+    key_func=get_rate_limit_key,
     default_limits=[f"{settings.rate_limit_per_minute}/minute"]
 )
 
