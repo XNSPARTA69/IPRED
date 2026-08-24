@@ -775,41 +775,29 @@ async def buscar_respuesta_directa(
                 logger.info("Capa 0 ZERO-AI HIT: Código %s no matriculado por estudiante %d", cod_target, codigo_est)
                 return f"La asignatura con código `{cod_target}` no figura matriculada en tu plan de estudios actual del semestre."
 
-    # A1. Botón / Consulta Explícita de Calendario Académico
-    if codigo_est and (clean_p in ["calendario academico", "ver calendario", "cronograma institucional", "fechas clave", "calendario", "cual es mi calendario academico proximas tutorias y fechas clave", "calendario academico proximas tutorias y fechas clave"] or clean_p.startswith("cual es mi calendario academico") or clean_p.startswith("cual es el calendario")):
+    # A1. Botón / Consulta de Calendario Académico Institucional
+    if any(k in clean_p for k in ["calendario academico", "fechas de parciales", "fechas academicas", "cronograma institucional", "cuando inician clases", "cuando terminan clases"]):
         resp = await _generar_respuesta_calendario_academico(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Calendario Académico para estudiante %d", codigo_est)
             return resp
 
     # A2. Botón / Consulta Explícita de Mis Materias
-    if codigo_est and clean_p in [
-        "mis materias", "mis asignaturas", "materias matriculadas", "cuales son mis materias", "que materias tengo", "ver mis materias",
-        "cuales son las materias que tengo matriculadas este semestre", "mis materias y docentes", "materias que tengo matriculadas este semestre",
-        "materias matriculadas este semestre", "mis materias matriculadas"
-    ]:
+    if codigo_est and any(k in clean_p for k in ["mis materias", "mis asignaturas", "materias matriculadas", "materias tengo", "ver mis materias", "asignaturas matriculadas", "que materias", "cuales son mis materias"]):
         resp = await _generar_respuesta_materias(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Mis Materias para estudiante %d", codigo_est)
             return resp
 
     # A3. Botón / Consulta Explícita de Mis Tutorías / Próximas Clases
-    if codigo_est and clean_p in [
-        "mis tutorias", "mis horarios", "proximas tutorias", "cuales son mis tutorias", "horario de clases", "cuando son mis tutorias", "ver tutorias", "mi horario",
-        "cuando son mis proximas tutorias y horarios de clase", "mis tutorias y clases", "proximas tutorias y horarios de clase",
-        "horarios de clase y proximas tutorias", "cuando tengo clases"
-    ]:
+    if codigo_est and any(k in clean_p for k in ["tutoria", "tutorias", "mi horario", "mis horarios", "horario de clase", "horarios de clase", "proximas clases", "cuando tengo clase", "cuando son mis clases", "cuando tengo clases"]):
         resp = await _generar_respuesta_tutorias(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Mis Tutorías para estudiante %d", codigo_est)
             return resp
 
     # A4. Botón / Consulta Explícita de Mis Profesores
-    if codigo_est and clean_p in [
-        "mis profesores", "mis docentes", "quienes son mis profesores", "profesores", "docentes", "correos docentes",
-        "quienes son los profesores de mis asignaturas y sus correos", "mis profesores y correos", "profesores de mis asignaturas y sus correos",
-        "quienes son mis docentes", "docentes y sus correos"
-    ]:
+    if codigo_est and any(k in clean_p for k in ["profesor", "profesores", "docente", "docentes", "correos docentes", "correo profesor"]):
         resp = await _generar_respuesta_profesores(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Mis Profesores para estudiante %d", codigo_est)
@@ -821,97 +809,96 @@ async def buscar_respuesta_directa(
         return await _generar_respuesta_perfil_estudiante(codigo_est, student_data)
 
     # A6. Botones de Subpreguntas y Preguntas Rápidas del Modal Flutter (Zero-AI instantáneo)
-    if clean_p in ["cancelacion de materias o semestre", "como es el proceso oficial para cancelar una materia o el semestre", "cancelar materia", "cancelar semestre", "como cancelo una materia", "cancelar materias"]:
+    if any(k in clean_p for k in ["cancelar materia", "cancelacion de materia", "cancelar semestre", "cancelacion de semestre", "como cancelo una materia", "cancelar asignaturas"]):
         return _generar_respuesta_cancelacion_materias()
 
-    if clean_p in ["requisitos de grado", "requisitos grado", "como me graduo", "grados ipred", "cuales son los requisitos oficiales y fechas de grado en el ipred", "requisitos y fechas de grado"]:
+    if any(k in clean_p for k in ["requisitos de grado", "requisitos grado", "requisitos para grado", "como me graduo", "grados ipred", "requisitos oficiales y fechas de grado", "fechas de grado"]):
         return _generar_respuesta_requisitos_grado()
 
-    if clean_p in ["certificados de notas y estudio", "como solicito un certificado de notas o constancia de estudio", "certificados de estudio", "solicitar certificado", "certificado de notas"]:
+    if any(k in clean_p for k in ["certificado de notas", "certificados de notas", "constancia de estudio", "certificados de estudio", "solicitar certificado", "certificado de estudio"]):
         return _generar_respuesta_certificados_notas()
 
-    if clean_p in ["paz y salvo institucional", "como tramitar el paz y salvo institucional uis", "paz y salvo uis", "paz y salvo"]:
+    if any(k in clean_p for k in ["paz y salvo institucional", "paz y salvo uis", "paz y salvo"]):
         return _generar_respuesta_paz_y_salvo()
 
-    if clean_p in ["homologaciones y reingresos", "como es el tramite de homologacion de asignaturas y reingreso", "homologacion", "reingreso"]:
+    if any(k in clean_p for k in ["homologacion", "homologaciones", "reingreso", "reingresos"]):
         return _generar_respuesta_homologaciones_reingreso()
 
-    if clean_p in ["incapacidades y supletorios", "que debo hacer si falto a una tutoria o evaluacion por salud o fuerza mayor", "incapacidad", "supletorios"]:
+    if any(k in clean_p for k in ["incapacidad", "incapacidades", "supletorios", "supletorio", "fuerza mayor"]):
         return _generar_respuesta_fuerza_mayor_salud()
 
-    if clean_p in ["moodle", "moodle ava", "plataforma moodle", "ingreso moodle", "ipred tic", "moodle ava e ipred tic", "como ingresar al aula virtual moodle ava y la plataforma ipred tic"]:
+    if any(k in clean_p for k in ["moodle ava", "moodle", "plataforma moodle", "ingreso moodle", "ipred tic", "aula virtual moodle"]):
         return _generar_respuesta_moodle_ava()
 
-    if clean_p in ["recuperar clave o correo uis", "como recuperar mi contrasena del sistema de estudiantes o el correo institucional uis", "recuperar clave", "recuperar contrasena", "olvide mi clave"]:
+    if any(k in clean_p for k in ["recuperar clave", "recuperar contrasena", "olvide mi clave", "olvide mi contrasena", "clave del correo", "correo institucional uis"]):
         return _generar_respuesta_recuperar_clave_correo()
 
-    if clean_p in ["consulta de calificaciones", "donde y como consulto mis calificaciones parciales y finales", "donde veo mis notas"]:
+    if any(k in clean_p for k in ["consulta de calificaciones", "consultar calificaciones", "donde veo mis notas", "donde consulto mis notas", "calificaciones parciales y finales"]):
         return _generar_respuesta_calificaciones_notas()
 
-    if clean_p in ["biblioteca virtual uis", "como acceder a la biblioteca virtual uis y consultar libros o bases de datos", "biblioteca virtual", "biblioteca uis"]:
+    if any(k in clean_p for k in ["biblioteca virtual", "biblioteca uis", "libros digitales", "bases de datos cientificas"]):
         return _generar_respuesta_biblioteca_virtual()
 
-    if clean_p in ["descargar liquidacion y pagos", "como descargar mi volante de liquidacion de matricula y que metodos de pago hay", "liquidacion de matricula", "recibo de matricula", "como pagar la matricula"]:
+    if any(k in clean_p for k in ["liquidacion de matricula", "recibo de matricula", "descargar liquidacion", "como pagar la matricula", "volante de liquidacion"]):
         return _generar_respuesta_liquidacion_matricula()
 
-    if clean_p in ["politica de gratuidad puedo estudiar", "politica de gratuidad", "puedo estudiar", "cuales son los requisitos y como funciona la politica de gratuidad en la matricula", "matricula cero"]:
+    if any(k in clean_p for k in ["politica de gratuidad", "puedo estudiar", "matricula cero", "gratuidad en la matricula"]):
         return _generar_respuesta_politica_gratuidad()
 
-    if clean_p in ["descuento del 10 por votacion", "descuento electoral", "descuento por votar", "descuento del 10", "como aplicar el descuento del 10 en la matricula con el certificado electoral"]:
+    if any(k in clean_p for k in ["descuento electoral", "descuento por votar", "descuento del 10", "certificado electoral"]):
         return _generar_respuesta_descuento_electoral()
 
-    if clean_p in ["servicio medico y odontologico", "como acceder a los servicios de salud y citas medicas en bienestar uis", "citas medicas", "salud bienestar"]:
+    if any(k in clean_p for k in ["servicio medico", "citas medicas", "odontologico", "salud bienestar"]):
         return _generar_respuesta_salud_bienestar()
 
-    if clean_p in ["apoyo psicologico y sea", "como solicitar apoyo psicologico o asesoria academica en el sea uis", "apoyo psicologico", "psicologia uis", "sea uis"]:
+    if any(k in clean_p for k in ["apoyo psicologico", "psicologia uis", "sea uis", "asesoria academica sea"]):
         return _generar_respuesta_psicologia_sea()
 
-    if clean_p in ["deportes gimnasio y cultura", "que actividades deportivas y culturales ofrece bienestar universitario uis", "gimnasio uis", "deportes uis"]:
+    if any(k in clean_p for k in ["deportes uis", "gimnasio uis", "actividades deportivas", "cultura uis"]):
         return _generar_respuesta_deportes_cultura()
 
-    if clean_p in ["comedor y apoyos socioeconomicos", "cuales son los apoyos socioeconomicos y subsidios de bienestar uis", "comedor uis", "subsidio de alimentacion"]:
+    if any(k in clean_p for k in ["comedor uis", "subsidio de alimentacion", "apoyos socioeconomicos"]):
         return _generar_respuesta_apoyos_alimentacion()
 
-    if clean_p in ["requisito de idioma extranjero ils", "cual es el requisito de ingles para graduarse en el ipred y como se aprueba", "requisito de ingles", "nivel de ingles"]:
+    if any(k in clean_p for k in ["requisito de ingles", "nivel de ingles", "idioma extranjero ils", "ingles para graduarse"]):
         return _generar_respuesta_requisito_ingles()
 
-    if clean_p in ["practica empresarial y social", "cuales son los requisitos para hacer practica empresarial como opcion de grado", "practica empresarial"]:
+    if any(k in clean_p for k in ["practica empresarial", "practica social", "pasantia"]):
         return _generar_respuesta_practica_empresarial()
 
-    if clean_p in ["proyectos de investigacion y posgrado", "como es la modalidad de proyecto de grado o seminario de actualizacion", "modalidades de grado"]:
+    if any(k in clean_p for k in ["modalidades de grado", "proyecto de grado", "seminario de actualizacion", "opcion de grado"]):
         return _generar_respuesta_modalidades_grado()
 
-    if clean_p in ["pruebas de estado saber pro tyt", "pruebas saber pro", "saber tyt", "cuando y como debo presentar las pruebas saber pro o saber tyt para grado"]:
+    if any(k in clean_p for k in ["saber pro", "saber tyt", "pruebas de estado", "examen saber"]):
         return _generar_respuesta_saber_pro_tyt()
 
-    if clean_p in ["escala de notas y aprobacion", "como es la escala de calificaciones y con cuanto se aprueba una materia en la uis", "escala de notas", "escala calificaciones", "con cuanto se aprueba", "sistema de calificaciones"]:
+    if any(k in clean_p for k in ["escala de notas", "escala calificaciones", "con cuanto se aprueba", "sistema de calificaciones"]):
         return _generar_respuesta_escala_notas()
 
-    if clean_p in ["promedio y matricula condicional", "que pasa si mi promedio baja de 3 2 o pierdo materias en la uis", "promedio condicional", "perdida de cupo"]:
+    if any(k in clean_p for k in ["promedio condicional", "matricula condicional", "perdida de cupo", "promedio baja de 3 2"]):
         return _generar_respuesta_promedio_condicional()
 
-    if clean_p in ["habilitaciones y supletorios", "como funcionan las habilitaciones validaciones y supletorios en la uis", "habilitaciones"]:
+    if any(k in clean_p for k in ["habilitaciones", "habilitacion", "supletorios"]):
         return _generar_respuesta_habilitaciones_supletorios()
 
-    if clean_p in ["sedes regionales", "sedes", "sedes ipred", "sedes uis", "donde estan las sedes", "telefonos sedes", "cuales son las sedes del ipred telefonos y canales de atencion", "sedes telefonos y direcciones"]:
+    if any(k in clean_p for k in ["sedes regionales", "sedes ipred", "sedes uis", "donde estan las sedes", "donde queda la sede", "telefonos sedes", "sedes telefonos", "sede barranca", "sede socorro", "sede malaga", "sede barbosa", "sede carmen", "sede puerto wilches"]):
         return _generar_respuesta_sedes()
 
-    if clean_p in ["todas las carreras del ipred", "oferta academica ipred", "oferta academica", "carreras ipred", "cuales son las carreras y programas academicos de pregrado que ofrece el ipred"]:
+    if any(k in clean_p for k in ["oferta academica", "carreras del ipred", "programas del ipred", "carreras que ofrece el ipred"]):
         return _generar_respuesta_oferta_programas()
 
-    if clean_p in ["regencia de farmacia", "cuales son los programas academicos y enfoque de regencia de farmacia en el ipred"]:
+    if any(k in clean_p for k in ["regencia de farmacia", "tecnologia en regencia de farmacia"]):
         return _generar_respuesta_farmacia()
 
-    if clean_p in ["gestion empresarial", "cuales son las caracteristicas del programa de gestion empresarial en el ipred"]:
+    if any(k in clean_p for k in ["gestion empresarial", "tecnologia empresarial"]):
         return _generar_respuesta_gestion_empresarial()
 
-    if clean_p in ["gestion judicial y criminalistica", "de que trata el programa de gestion judicial e investigacion criminal del ipred"]:
+    if any(k in clean_p for k in ["gestion judicial", "criminalistica"]):
         return _generar_respuesta_gestion_judicial()
 
-    if clean_p in ["proceso de matricula", "como matricular materias", "inscripcion de asignaturas"]:
+    if any(k in clean_p for k in ["proceso de matricula", "como matricular materias", "inscripcion de asignaturas", "inscribir materias"]):
         return _generar_respuesta_matricula_materias()
 
-    # Si la pregunta no coincide exactamente con un botón o prompt oficial, se entrega limpiamente a Gemini AI
     return None
 
 
