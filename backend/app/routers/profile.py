@@ -111,6 +111,55 @@ async def get_calendar(request: Request):
     }
 
 
+@router.get("/academic")
+async def get_academic_summary(request: Request):
+    """Obtener el resumen académico completo (materias + horarios) para sincronización y uso offline."""
+    user = await get_current_user(request)
+    codigo_est = _extract_codigo_est(user)
+    
+    from app.db.repositories.student_repository import StudentRepository
+    repo = StudentRepository()
+    
+    profile = await repo.get_profile_by_code(codigo_est)
+    subjects = await repo.get_enrolled_subjects(codigo_est)
+    schedules = await repo.get_student_schedule(codigo_est)
+    
+    return {
+        "profile": {
+            "codigo_est": codigo_est,
+            "primer_nombre": profile.primer_nombre if profile else "Estudiante",
+            "primer_apellido": profile.primer_apellido if profile else "",
+            "nombre_completo": profile.nombre_completo if profile else "Estudiante",
+            "nombre_programa": profile.nombre_programa if profile else "IPRED - UIS",
+            "nombre_sede": profile.nombre_sede if profile else "Bucaramanga",
+            "grupo": profile.grupo if profile else "",
+        },
+        "subjects": [
+            {
+                "codigo_asignatura": s.codigo_asignatura,
+                "nombre_asignatura": s.nombre_asignatura,
+                "grupo": s.grupo,
+                "profesor": s.profesor,
+                "correo_profesor": s.correo_profesor,
+            }
+            for s in subjects
+        ],
+        "schedule": [
+            {
+                "codigo_asignatura": sc.codigo_asignatura,
+                "nombre_asignatura": sc.nombre_asignatura,
+                "grupo": sc.grupo,
+                "profesor": sc.profesor,
+                "fecha_tutoria": sc.fecha_tutoria,
+                "hora_inicio": sc.hora_inicio,
+                "hora_fin": sc.hora_fin,
+                "tipo_tutoria": sc.tipo_tutoria,
+            }
+            for sc in schedules
+        ],
+    }
+
+
 @router.put("", response_model=PerfilResponse)
 async def update_profile(req: PerfilUpdate, request: Request):
     """Actualizar preferencias del perfil del estudiante autenticado."""

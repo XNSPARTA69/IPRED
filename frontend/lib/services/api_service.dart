@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
+import 'local_zero_ai_service.dart';
 
 class ApiService {
   CancelToken? _currentChatCancelToken;
@@ -251,9 +251,25 @@ class ApiService {
         }
         onDone(syncResp);
       } else {
+        // 3. Fallback a Motor Local Zero-AI Offline
+        final offlineResp = await LocalZeroAiService().processOfflineQuery(message);
+        if (offlineResp != null) {
+          final respuesta = (offlineResp['respuesta'] as String?) ?? '';
+          onChunk(respuesta, esIa: false);
+          onDone(offlineResp);
+          return;
+        }
         onError('No se pudo conectar con el servidor. Intenta de nuevo.');
       }
     } catch (e) {
+      // 3. Fallback a Motor Local Zero-AI Offline ante fallo de red
+      final offlineResp = await LocalZeroAiService().processOfflineQuery(message);
+      if (offlineResp != null) {
+        final respuesta = (offlineResp['respuesta'] as String?) ?? '';
+        onChunk(respuesta, esIa: false);
+        onDone(offlineResp);
+        return;
+      }
       onError('Error de comunicación con el servidor.');
     } finally {
       _currentChatCancelToken = null;
@@ -296,10 +312,11 @@ class ApiService {
         return null;
       }
       debugPrint('DioException en sendMessage: ${de.type} - ${de.message}');
-      return null;
+      // Fallback a motor Zero-AI offline
+      return await LocalZeroAiService().processOfflineQuery(message);
     } catch (e) {
       debugPrint('Error enviando mensaje: $e');
-      return null;
+      return await LocalZeroAiService().processOfflineQuery(message);
     }
   }
 
@@ -432,6 +449,27 @@ class ApiService {
       return null;
     } catch (e) {
       debugPrint('Error obteniendo calendario académico: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAcademicSummary(String accessToken) async {
+    try {
+      final response = await _dio.get(
+        '/profile/academic',
+        options: Options(
+          headers: {'Authorization': 'Bearer $accessToken'},
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error obteniendo resumen académico para caché offline: $e');
       return null;
     }
   }

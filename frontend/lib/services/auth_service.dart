@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_service.dart';
+import 'local_zero_ai_service.dart';
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -119,6 +120,19 @@ class AuthService extends ChangeNotifier {
     }).catchError((err) {
       debugPrint('Error verificando token en segundo plano: $err');
     });
+
+    // Sincronizar datos académicos en caché para disponibilidad offline
+    ApiService().getAcademicSummary(token).then((summary) {
+      if (summary != null) {
+        LocalZeroAiService().cacheStudentData(
+          profile: summary['profile'] as Map<String, dynamic>? ?? {},
+          subjects: summary['subjects'] as List<dynamic>? ?? [],
+          schedule: summary['schedule'] as List<dynamic>? ?? [],
+        );
+      }
+    }).catchError((err) {
+      debugPrint('No se pudo sincronizar resumen académico offline: $err');
+    });
   }
 
   Future<bool> login(String username, String password) async {
@@ -150,6 +164,18 @@ class AuthService extends ChangeNotifier {
         }
         
         notifyListeners();
+
+        // Precargar caché offline de forma inmediata en segundo plano
+        ApiService().getAcademicSummary(_accessToken!).then((summary) {
+          if (summary != null) {
+            LocalZeroAiService().cacheStudentData(
+              profile: summary['profile'] as Map<String, dynamic>? ?? {},
+              subjects: summary['subjects'] as List<dynamic>? ?? [],
+              schedule: summary['schedule'] as List<dynamic>? ?? [],
+            );
+          }
+        }).catchError((_) {});
+
         return null; // Éxito, sin error
       }
       return 'Código de estudiante o contraseña incorrectos.';

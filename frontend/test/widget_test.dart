@@ -24,9 +24,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verificar presencia de elementos institucionales
-    expect(find.text('IPRED CHATBOT'), findsOneWidget);
-    expect(find.text('Iniciar Sesión'), findsOneWidget);
-    expect(find.text('Registrarme'), findsOneWidget);
+    expect(find.text('UIS DYV'), findsOneWidget);
+    expect(find.text('ASISTENTE VIRTUAL UNIVERSITARIO'), findsOneWidget);
+    expect(find.text('Iniciar Sesión'), findsWidgets);
     expect(find.text('Entrar al Chatbot'), findsOneWidget);
   });
 }
