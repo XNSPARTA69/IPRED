@@ -27,12 +27,13 @@
 
 ## 🌟 Características Principales
 
+* 🎙️ **Llamadas de Voz Interactivas en Vivo (100% Gratis):** Habla directamente con tu asistente virtual con reconocimiento de voz continuo en tiempo real (`speech_to_text`), síntesis de voz natural neuronal (`flutter_tts`), supresión de eco y ecualizador visual dinámico.
 * ⚡ **Motor Determinista Zero-AI ($0.00 COP / 0 Tokens):** Resuelve consultas de horarios de clase, materias matriculadas, docentes con correos institucionales, calendario académico, trámites y reglamentos en **menos de 30 milisegundos** sin consumir tokens de IA.
 * 🤖 **IA Híbrida Inteligente (Google Gemini Flash-Lite):** Para preguntas abiertas complejas o no estructuradas, recurre a Gemini mediante un prompt enriquecido con el contexto oficial UIS y búsqueda web privada (*SearXNG*).
-* 📅 **Gestión de Horarios y Cronogramas:** Soporte integral para más de **18,000 sesiones de clase** y **684 estudiantes** distribuidos en todas las sedes regionales del IPRED (*Bucaramanga, Barrancabermeja, El Carmen de Chucurí, Puerto Wilches, Barbosa, Málaga, Socorro, San Alberto*).
+* 📅 **Gestión de Horarios y Cronogramas:** Soporte integral para más de **20,500 sesiones de clase** y estudiantes distribuidos en todas las sedes regionales del IPRED (*Bucaramanga, Barrancabermeja, El Carmen de Chucurí, Puerto Wilches, Barbosa, Málaga, Socorro, San Alberto*).
 * 📱 **Frontend Flutter Ultra-Fluido (60/120 FPS):** Interfaz moderna mobile-first con renderizado optimizado por `RepaintBoundary`, memoización de Markdown, tablas nativas inteligentes y soporte de tema claro/oscuro.
 * 🌐 **Despliegue Global Inmediato con Cloudflare:** Conexión segura HTTPS con protocolo QUIC/HTTP/3 y auto-arranque continuo.
-* 🔒 **Seguridad Criptográfica:** Contraseñas hasheadas con **Argon2id**, autenticación **JWT**, control de accesos por roles y protección contra inyecciones SQL.
+* 📖 **Guía Completa para Agentes IA y Docker:** Consulta [`AI_DOCKER_GUIDE.md`](./AI_DOCKER_GUIDE.md) para detalles del despliegue y arquitectura de base de datos.
 
 ---
 

@@ -13,7 +13,7 @@ RUN flutter pub get
 
 # Copiar código fuente y compilar bundle de producción
 COPY . .
-RUN flutter build web --release --pwa-strategy=none --web-renderer canvaskit
+RUN flutter build web --release --pwa-strategy=none
 
 # Etapa 2: Servidor Nginx Alpine ultra-liviano (< 25 MB)
 FROM nginx:alpine AS runtime

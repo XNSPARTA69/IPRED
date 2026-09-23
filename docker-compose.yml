@@ -84,6 +84,7 @@ services:
       ipred_redis:
         condition: service_healthy
     volumes:
+      - ./backend/app:/app/app
       - backend_data:/app/data
     ulimits:
       nofile:

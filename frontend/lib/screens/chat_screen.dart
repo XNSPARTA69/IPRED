@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/chat_bubble.dart';
 import 'profile_screen.dart';
+import 'voice_call_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -738,7 +739,6 @@ class _ChatScreenState extends State<ChatScreen> {
                           ? _buildEmptyState(isDark, userName)
                           : ListView.builder(
                               controller: _scrollController,
-                              cacheExtent: 2000,
                               padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
                               itemCount: _messages.length + (_isLoading && (_messages.isEmpty || _messages.last['rol'] == 'user') ? 1 : 0),
                               itemBuilder: (context, index) {
@@ -861,6 +861,39 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       actions: [
+        IconButton(
+          icon: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF10B981), Color(0xFF059669)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(Icons.phone_in_talk_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+          tooltip: 'Llamada de Voz IPRED (100% Gratis)',
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => VoiceCallScreen(conversationId: _currentConversationId)),
+            );
+            if (mounted) {
+              _loadMessages();
+            }
+          },
+        ),
         IconButton(
           icon: Container(
             width: 36,

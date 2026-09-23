@@ -78,5 +78,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>IPRED necesita acceso al micrófono para permitir la comunicación por voz en las llamadas.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>IPRED utiliza el reconocimiento de voz para transcribir tus consultas académicas en tiempo real.</string>
 </dict>
 </plist>

@@ -723,8 +723,18 @@ async def buscar_respuesta_directa(
         logger.info("Capa 0 ZERO-AI HIT: Tarea/Ejercicio/Código/Fuera de contexto declinado en 1 línea.")
         return "Mi función es exclusivamente de orientación administrativa e institucional en el IPRED - UIS (horarios, docentes, trámites, reglamentos y redacción de correos). No estoy habilitado para resolver tareas, operaciones matemáticas ni trabajos académicos."
 
-    # 0.1 Protección contra negaciones o consultas complejas
-    if any(neg in clean_p for neg in ["no quiero", "no me muestres", "no ver", "sin mis", "otra cosa", "en vez de", "diferente a"]):
+    # 0.1 Protección contra consultas complejas, redacción de correos, cartas y razonamiento
+    es_consulta_compleja = any(
+        kw in clean_p for kw in [
+            "redactar", "redactame", "redacta", "escribir", "escribele", "escribe", "hacer un correo",
+            "correo a", "carta a", "mensaje a", "excusa", "solicitar", "como puedo", "como redacto",
+            "por que", "que hago si", "explicar", "asesoria", "consejo", "ayudame a", "que opinas",
+            "pasos para", "opciones", "recomendacion", "sugerencia", "no quiero", "no me muestres",
+            "sin mis", "otra cosa", "en vez de", "diferente a"
+        ]
+    )
+    if es_consulta_compleja:
+        logger.info("Capa 0 PASS: Consulta compleja / redacción delegada al modelo de IA.")
         return None
 
     # 1. Saludos comunes (Zero-AI)
@@ -783,21 +793,21 @@ async def buscar_respuesta_directa(
             return resp
 
     # A2. Botón / Consulta Explícita de Mis Materias
-    if codigo_est and any(k in clean_p for k in ["mis materias", "mis asignaturas", "materias matriculadas", "materias tengo", "ver mis materias", "asignaturas matriculadas", "que materias", "cuales son mis materias"]):
+    if codigo_est and any(k in clean_p for k in ["mis materias", "mis asignaturas", "materias matriculadas", "ver mis materias", "asignaturas matriculadas", "cuales son mis materias", "lista de materias", "que materias tengo", "cuales materias tengo", "materias que tengo", "que asignaturas tengo"]):
         resp = await _generar_respuesta_materias(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Mis Materias para estudiante %d", codigo_est)
             return resp
 
     # A3. Botón / Consulta Explícita de Mis Tutorías / Próximas Clases
-    if codigo_est and any(k in clean_p for k in ["tutoria", "tutorias", "mi horario", "mis horarios", "horario de clase", "horarios de clase", "proximas clases", "cuando tengo clase", "cuando son mis clases", "cuando tengo clases"]):
+    if codigo_est and any(k in clean_p for k in ["mis tutorias", "mi horario", "mis horarios", "horario de tutorias", "proximas tutorias", "cuando tengo tutoria", "cuando son mis clases", "cuando tengo clases", "horario de clases", "a que hora es mi tutoria", "a que hora es mi clase", "a que hora tengo clase", "que tutorias tengo", "proxima tutoria"]):
         resp = await _generar_respuesta_tutorias(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Mis Tutorías para estudiante %d", codigo_est)
             return resp
 
     # A4. Botón / Consulta Explícita de Mis Profesores
-    if codigo_est and any(k in clean_p for k in ["profesor", "profesores", "docente", "docentes", "correos docentes", "correo profesor"]):
+    if codigo_est and any(k in clean_p for k in ["mis profesores", "mis docentes", "lista de profesores", "quienes son mis profesores", "cuales son mis profesores", "correos de mis profesores", "correos docentes", "quienes son mis profesores", "quien me da clase"]):
         resp = await _generar_respuesta_profesores(codigo_est, student_data)
         if resp:
             logger.info("Capa 0 ZERO-AI HIT: Mis Profesores para estudiante %d", codigo_est)
