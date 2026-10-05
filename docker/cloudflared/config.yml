@@ -1,8 +1,9 @@
-tunnel: 7908d7e1-a2d5-42fc-ab21-d868556a3b86
-credentials-file: /etc/cloudflared/7908d7e1-a2d5-42fc-ab21-d868556a3b86.json
+tunnel: 50f96760-2143-4c43-8ac9-54ae5910878a
+credentials-file: /etc/cloudflared/50f96760-2143-4c43-8ac9-54ae5910878a.json
 
 ingress:
   - hostname: ipred.pasteleriamiranda.art
-    service: http://ipred_frontend_nginx:80
+    service: http://ipred_frontend:80
 
   - service: http_status:404
+
