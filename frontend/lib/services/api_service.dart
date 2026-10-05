@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 import 'local_zero_ai_service.dart';
 
@@ -12,6 +13,8 @@ class ApiService {
     _currentChatCancelToken?.cancel('User cancelled');
     _currentChatCancelToken = null;
   }
+
+  static String? _customBaseUrl;
 
   static String get defaultBaseUrl {
     const fromEnv = String.fromEnvironment('API_BASE_URL');
@@ -30,12 +33,67 @@ class ApiService {
     return 'https://ipred.pasteleriamiranda.art';
   }
 
+  static String get currentBaseUrl => _customBaseUrl ?? defaultBaseUrl;
+
+  static Future<void> loadSavedBaseUrl() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('server_base_url');
+      if (saved != null && saved.trim().isNotEmpty) {
+        _customBaseUrl = saved.trim().replaceAll(RegExp(r'/+$'), '');
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> saveBaseUrl(String url) async {
+    final cleanUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
+    _customBaseUrl = cleanUrl.isNotEmpty ? cleanUrl : null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_customBaseUrl != null) {
+        await prefs.setString('server_base_url', _customBaseUrl!);
+      } else {
+        await prefs.remove('server_base_url');
+      }
+    } catch (_) {}
+  }
+
+  static Future<bool> testConnection(String url) async {
+    final cleanUrl = url.trim().replaceAll(RegExp(r'/+$'), '');
+    if (cleanUrl.isEmpty) return false;
+    try {
+      final tempDio = Dio(
+        BaseOptions(
+          baseUrl: cleanUrl,
+          connectTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+        ),
+      );
+      final res = await tempDio.get('/health');
+      return res.statusCode == 200;
+    } catch (_) {
+      try {
+        final tempDio = Dio(
+          BaseOptions(
+            baseUrl: cleanUrl,
+            connectTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 4),
+          ),
+        );
+        final res = await tempDio.get('/');
+        return res.statusCode == 200;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+
   late final Dio _dio;
 
   ApiService({String? baseUrl}) {
     _dio = Dio(
       BaseOptions(
-        baseUrl: baseUrl ?? defaultBaseUrl,
+        baseUrl: baseUrl ?? currentBaseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
         headers: {

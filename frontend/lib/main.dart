@@ -10,7 +10,8 @@ import 'screens/chat_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Inicializar token almacenado
+  // Inicializar URL del servidor personalizada y token almacenado
+  await ApiService.loadSavedBaseUrl();
   await AuthService.instance.loadStoredToken();
   
   runApp(

@@ -4,6 +4,11 @@ name: Build Mobile App (Android APK & iOS)
 # Solo se ejecuta cuando tú presionas el botón "Run workflow" en la pestaña Actions de GitHub.
 on:
   workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Base URL del API Backend (ej. https://ipred.pasteleriamiranda.art o http://tu-ip:3000)'
+        required: false
+        default: 'https://ipred.pasteleriamiranda.art'
 
 jobs:
   build-android:
@@ -33,7 +38,7 @@ jobs:
       - name: Compilar APK Release
         run: |
           cd frontend
-          flutter build apk --release --no-tree-shake-icons --dart-define=API_BASE_URL=https://ipred.pasteleriamiranda.art
+          flutter build apk --release --no-tree-shake-icons --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://ipred.pasteleriamiranda.art' }}
 
       - name: Subir APK como Artefacto
         uses: actions/upload-artifact@v4
@@ -62,7 +67,7 @@ jobs:
       - name: Compilar iOS Release (Sin firma de certificado)
         run: |
           cd frontend
-          flutter build ios --release --no-codesign --no-tree-shake-icons --dart-define=API_BASE_URL=https://ipred.pasteleriamiranda.art
+          flutter build ios --release --no-codesign --no-tree-shake-icons --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://ipred.pasteleriamiranda.art' }}
 
       - name: Empaquetar Payload e IPA Oficial
         run: |

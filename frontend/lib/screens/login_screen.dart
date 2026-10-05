@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -86,6 +87,202 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _showServerConfigDialog(BuildContext context, bool isDark) {
+    final urlController = TextEditingController(text: ApiService.currentBaseUrl);
+    bool isTesting = false;
+    bool? testResult;
+    String? testMessage;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.uisGreen.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.dns_rounded, color: AppTheme.uisGreen, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Servidor / IP',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Si accedes desde tu celular en la misma red Wi-Fi, ingresa la IP de tu PC:',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12.5,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: urlController,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 13,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'URL Base del Servidor',
+                    hintText: 'http://10.13.181.2:3000',
+                    prefixIcon: const Icon(Icons.link_rounded, size: 20, color: AppTheme.uisGreen),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    ActionChip(
+                      label: Text('WiFi (Puerto 3000)', style: GoogleFonts.plusJakartaSans(fontSize: 11)),
+                      backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      onPressed: () {
+                        setDialogState(() {
+                          urlController.text = 'http://10.13.181.2:3000';
+                          testResult = null;
+                        });
+                      },
+                    ),
+                    ActionChip(
+                      label: Text('WiFi (Puerto 8000)', style: GoogleFonts.plusJakartaSans(fontSize: 11)),
+                      backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      onPressed: () {
+                        setDialogState(() {
+                          urlController.text = 'http://10.13.181.2:8000';
+                          testResult = null;
+                        });
+                      },
+                    ),
+                    ActionChip(
+                      label: Text('Cloudflare', style: GoogleFonts.plusJakartaSans(fontSize: 11)),
+                      backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      onPressed: () {
+                        setDialogState(() {
+                          urlController.text = 'https://ipred.pasteleriamiranda.art';
+                          testResult = null;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                if (testMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: (testResult ?? false)
+                          ? AppTheme.uisGreen.withValues(alpha: 0.12)
+                          : Colors.redAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: (testResult ?? false) ? AppTheme.uisGreen : Colors.redAccent,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          (testResult ?? false) ? Icons.check_circle_rounded : Icons.error_rounded,
+                          size: 18,
+                          color: (testResult ?? false) ? AppTheme.uisGreen : Colors.redAccent,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            testMessage!,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: (testResult ?? false) ? AppTheme.uisGreen : Colors.redAccent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton.icon(
+              icon: isTesting
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.uisGreen),
+                    )
+                  : const Icon(Icons.network_check_rounded, size: 18),
+              label: Text(
+                'Probar Conexión',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+              ),
+              onPressed: isTesting
+                  ? null
+                  : () async {
+                      setDialogState(() {
+                        isTesting = true;
+                        testResult = null;
+                        testMessage = null;
+                      });
+                      final ok = await ApiService.testConnection(urlController.text);
+                      setDialogState(() {
+                        isTesting = false;
+                        testResult = ok;
+                        testMessage = ok
+                            ? '✅ Servidor respondiendo correctamente'
+                            : '❌ No se pudo conectar a este puerto/IP';
+                      });
+                    },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.uisGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final newUrl = urlController.text.trim();
+                await ApiService.saveBaseUrl(newUrl);
+                if (dialogCtx.mounted) {
+                  Navigator.of(dialogCtx).pop();
+                }
+                if (mounted) {
+                  setState(() {
+                    _successMessage = 'Servidor actualizado a: ${ApiService.currentBaseUrl}';
+                  });
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -120,6 +317,31 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppTheme.accentCyan.withValues(alpha: isDark ? 0.12 : 0.08),
+              ),
+            ),
+          ),
+
+          // Botón de configuración de servidor / IP
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E293B).withValues(alpha: 0.85)
+                      : Colors.white.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.dns_rounded, size: 20),
+                  tooltip: 'Configurar Servidor / IP',
+                  color: AppTheme.uisGreen,
+                  onPressed: () => _showServerConfigDialog(context, isDark),
+                ),
               ),
             ),
           ),
