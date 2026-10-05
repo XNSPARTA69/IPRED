@@ -148,9 +148,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: ipred_cloudflare_tunnel
     restart: always
-    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run 7908d7e1-a2d5-42fc-ab21-d868556a3b86
-    volumes:
-      - ./docker/cloudflared:/etc/cloudflared:ro
+    command: tunnel --no-autoupdate --url http://ipred_frontend:80
     networks:
       - ipred_network
     depends_on:
