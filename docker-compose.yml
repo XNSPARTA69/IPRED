@@ -1,0 +1,175 @@
+# ==============================================================================
+# IPRED Chatbot UIS - Orquestación Docker Compose de Producción Institucional
+# ==============================================================================
+# Servicios incluidos:
+#   1. ipred_db        : PostgreSQL 16 Alpine con índices en español y pg_trgm
+#   2. ipred_redis     : Redis 7 Alpine para caché de alto rendimiento
+#   3. ipred_backend   : FastAPI Python 3.12 (Zero-AI + Gemini AI Fallback)
+#   4. ipred_frontend  : Flutter Web servido sobre Nginx Alpine con Proxy Inverso
+#   5. ipred_searxng   : Motor de búsqueda web privado auto-alojado
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. BASE DE DATOS POSTGRESQL
+  # ----------------------------------------------------------------------------
+  ipred_db:
+    image: postgres:16-alpine
+    container_name: ipred_postgres
+    restart: always
+    command: ["postgres", "-c", "max_connections=250", "-c", "shared_buffers=256MB"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ipred_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ipred_secure_password_2026!}
+      POSTGRES_DB: ${POSTGRES_DB:-ipred_chatbot}
+      TZ: America/Bogota
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database_schema_postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ipred_user} -d ${POSTGRES_DB:-ipred_chatbot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ipred_network
+
+  # ----------------------------------------------------------------------------
+  # 2. CACHÉ REDIS
+  # ----------------------------------------------------------------------------
+  ipred_redis:
+    image: redis:7-alpine
+    container_name: ipred_redis
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-ipred_redis_pass_2026!}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-ipred_redis_pass_2026!}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - ipred_network
+
+  # ----------------------------------------------------------------------------
+  # 3. BACKEND FASTAPI (PYTHON 3.12)
+  # ----------------------------------------------------------------------------
+  ipred_backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ipred_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ipred_user}:${POSTGRES_PASSWORD:-ipred_secure_password_2026!}@ipred_db:5432/${POSTGRES_DB:-ipred_chatbot}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production-32chars!}
+      - SEARXNG_BASE_URL=http://ipred_searxng:8080
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-ipred_redis_pass_2026!}@ipred_redis:6379/0
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - TZ=America/Bogota
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      ipred_db:
+        condition: service_healthy
+      ipred_redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+      - backend_data:/app/data
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ipred_network
+
+  # ----------------------------------------------------------------------------
+  # 4. FRONTEND FLUTTER WEB + NGINX REVERSE PROXY
+  # ----------------------------------------------------------------------------
+  ipred_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ipred_frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - ipred_backend
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ipred_network
+
+  # ----------------------------------------------------------------------------
+  # 5. MOTOR DE BÚSQUEDA PRIVADO SEARXNG
+  # ----------------------------------------------------------------------------
+  ipred_searxng:
+    image: searxng/searxng:latest
+    container_name: ipred_searxng
+    restart: always
+    ports:
+      - "${SEARXNG_PORT:-8080}:8080"
+    volumes:
+      - ./docker/searxng:/etc/searxng:rw
+      - searxng_data:/var/lib/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+      - BIND_ADDRESS=0.0.0.0:8080
+    networks:
+      - ipred_network
+
+  # ----------------------------------------------------------------------------
+  # 6. TÚNEL CLOUDFLARE HTTPS PÚBLICO (ACCESO GLOBAL MÓVIL Y WEB)
+  # ----------------------------------------------------------------------------
+  ipred_tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: ipred_cloudflare_tunnel
+    restart: always
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run 50f96760-2143-4c43-8ac9-54ae5910878a
+    volumes:
+      - ./docker/cloudflared:/etc/cloudflared:ro
+    networks:
+      - ipred_network
+    depends_on:
+      - ipred_frontend
+
+# ------------------------------------------------------------------------------
+# REDES Y VOLÚMENES PERSISTENTES
+# ------------------------------------------------------------------------------
+networks:
+  ipred_network:
+    name: ipred_network
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: ipred_postgres_data
+  redis_data:
+    name: ipred_redis_data
+  backend_data:
+    name: ipred_backend_data
+  searxng_data:
+    name: ipred_searxng_data
